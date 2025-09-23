@@ -12,10 +12,13 @@
 #include "./header/Shader.h"
 #include "./header/Object.h"
 
+const float EPS = 1e-6;
+
 // Settings
 const int INITIAL_SCR_WIDTH = 800;
 const int INITIAL_SCR_HEIGHT = 600;
 const float AQUARIUM_BOUNDARY = 15.0f;
+const float AQUARIUM_HEIGHT = 20.0f;
 
 // Animation constants
 const float TAIL_ANIMATION_SPEED = 5.0f;
@@ -57,6 +60,7 @@ struct Seaweed {
 
 struct playerFish {
     glm::vec3 position = glm::vec3(0.0f, 5.0f, 0.0f);
+	glm::vec3 dimensions = glm::vec3(1.0f, 1.0f, 1.0f);
     float angle = 0.0f; // Heading direction in radians
     float speed = 2.0f;
     float rotationSpeed = 2.0f;
@@ -121,7 +125,11 @@ int main() {
         return -1;
     }
 
-    // TODO: Enable depth test, face culling
+    // Enable depth test, face culling
+	glEnable(GL_DEPTH_TEST);
+	glEnable(GL_CULL_FACE);
+	glFrontFace(GL_CCW);
+	glCullFace(GL_BACK);
 
     // Initialize Object and Shader
     init();
@@ -161,9 +169,25 @@ int main() {
         drawModel("cube",model,view,projection, glm::vec3(0.9f, 0.8f, 0.6f));
         ==============================================================================*/
 
-        // TODO: Create model, view, and perspective matrix
+        // Create model, view, and perspective matrix
 
-        // TODO: Aquarium Base
+		glm::mat4 playerFishModel(1.0f);
+		glm::mat4 view = glm::lookAt(
+			glm::vec3(0.0f, 10.0f, 25.0f),
+			glm::vec3(0.0f, 8.0f, 0.0f),
+			glm::vec3(0.0f, 1.0f, 0.0f)
+		);
+		glm::mat4 projection = glm::perspective(
+			glm::radians(45.0f),
+			(float)SCR_WIDTH / (float)SCR_HEIGHT,
+			0.1f,
+			1000.0f
+		);
+
+        // Aquarium Base
+		glm::mat4 aquariumBaseModel(1.0f);
+		aquariumBaseModel = glm::scale(aquariumBaseModel, glm::vec3(70.0f, 1.0f, 40.0f));
+		drawModel("cube", aquariumBaseModel, view, projection, glm::vec3(0.9f, 0.8f, 0.6f));
         
         // TODO: Draw seaweeds with hierarchical structure and wave motion
         // Wave motion is sine wave based on global time and segment phase
@@ -174,7 +198,7 @@ int main() {
         // so that you can create a forward wave motion.
         
 
-        // TODO: Draw school of fish
+        // Draw school of fish
         // The fish movement logic is implemented.
         // All you need is to set up the position like the example in initAquarium()
         for (const auto& fish : schoolFish) {
@@ -241,7 +265,6 @@ void processInput(GLFWwindow* window, float deltaTime) {
     // we need to check key states every frame using glfwGetKey.
     // This ensures smooth, frame-consistent input handling such as movement or rotation.
 
-    // TODO:
     // Controls:
     // - W / S           : Move the fish along the X-axis.
     // - A / D           : Move the fish along the Z-axis.
@@ -253,28 +276,39 @@ void processInput(GLFWwindow* window, float deltaTime) {
     // - The fish can move freely in all three axes but should be clamped within
     //   the aquarium boundaries to stay visible.
     
+	float deltaSpeed = playerFish.speed * deltaTime;
+	glm::vec3 playerShift(0.0f, 0.0f, 0.0f);
+
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
-        
+        playerShift.x += 1.0f;
     }
     if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
-        
+        playerShift.x += -1.0f;
     }
     if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS){
-        
+        playerShift.z += 1.0f;
     }
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS){
-         
+		playerShift.z += -1.0f;
     }
     if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS){
-
+		playerShift.y += 1.0f;
     }
     if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS){
-        
+        playerShift.y += -1.0f;
     }
 
-    // TODO: Keep fish within aquarium bounds
-}
+	playerShift = glm::normalize(playerShift) * deltaSpeed;
 
+    // Keep fish within aquarium bounds
+	playerFish.position += playerShift;
+	playerFish.position.x = max(playerFish.position.x, -AQUARIUM_BOUNDARY + playerFish.dimensions.x / 2);
+	playerFish.position.x = min(playerFish.position.x, AQUARIUM_BOUNDARY - playerFish.dimensions.x / 2);
+	playerFish.position.z = max(playerFish.position.z, -AQUARIUM_BOUNDARY + playerFish.dimensions.z / 2);
+	playerFish.position.z = min(playerFish.position.z, AQUARIUM_BOUNDARY - playerFish.dimensions.z / 2);
+	playerFish.position.y = max(playerFish.position.y, 0 + playerFish.dimensions.y / 2);
+	playerFish.position.y = min(playerFish.position.y, AQUARIUM_HEIGHT - playerFish.dimensions.y / 2);
+}
 
 void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
     // The action is one of GLFW_PRESS, GLFW_REPEAT or GLFW_RELEASE. 
@@ -286,7 +320,10 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
         glfwSetWindowShouldClose(window, true);
     }
 
-    // TODO: Implement mouth toggle logic
+    // Implement mouth toggle logic
+	if (key == GLFW_KEY_M && action == GLFW_PRESS) {
+		playerFish.mouthOpen = not playerFish.mouthOpen;
+	}
 }
 
 void drawModel(std::string type, const glm::mat4& model, const glm::mat4& view, const glm::mat4& projection, const glm::vec3& color) {
@@ -422,4 +459,19 @@ void initializeAquarium() {
     //     fish.color = glm::vec3(static_cast<float>(rand()) / RAND_MAX, static_cast<float>(rand()) / RAND_MAX, static_cast<float>(rand()) / RAND_MAX);
     //     schoolFish.push_back(fish);
     // }
+	
+	schoolFish.clear();
+	const std::vector<std::pair<std::string, glm::vec3>> fishPositions {
+		{"fish1", glm::vec3(0.0f, 15.0f, 0.0f)},
+		{"fish2", glm::vec3(7.0f, 3.0f, 0.0f)},
+		{"fish3", glm::vec3(-3.0f, 7.0f, -7.0f)},
+	};
+	for (const auto& [name, pos] : fishPositions) {
+		Fish fish;
+		fish.position = pos;
+		fish.direction = glm::normalize(glm::vec3(1.0f, 0.0f, 0.0f));
+		fish.fishType = name;
+		fish.color = glm::vec3(static_cast<float>(rand()) / RAND_MAX, static_cast<float>(rand()) / RAND_MAX, static_cast<float>(rand()) / RAND_MAX);
+		schoolFish.push_back(fish);
+	}
 }
