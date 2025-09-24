@@ -12,13 +12,11 @@
 #include "./header/Shader.h"
 #include "./header/Object.h"
 
-const float EPS = 1e-6;
-
 // Settings
-const int INITIAL_SCR_WIDTH = 800;
-const int INITIAL_SCR_HEIGHT = 600;
-const float AQUARIUM_BOUNDARY = 15.0f;
-const float AQUARIUM_HEIGHT = 20.0f;
+const int INITIAL_SCR_WIDTH = 1280;
+const int INITIAL_SCR_HEIGHT = 720;
+const float AQUARIUM_BOUNDARY = 8.0f;
+const float AQUARIUM_HEIGHT = 7.0f;
 
 // Animation constants
 const float TAIL_ANIMATION_SPEED = 5.0f;
@@ -48,7 +46,9 @@ struct SeaweedSegment {
     glm::vec3 localPos;
     glm::vec3 color;
     float phase;
+	float angle;
     glm::vec3 scale;
+	float swayAmplitude;
     SeaweedSegment* next = nullptr;
 };
 
@@ -56,11 +56,12 @@ struct Seaweed {
     glm::vec3 basePosition;
     SeaweedSegment* rootSegment = nullptr;
     float swayOffset = 0.0f;
+	float swaySpeed = glm::radians(90.0f); // radians per second
 };
 
 struct playerFish {
     glm::vec3 position = glm::vec3(0.0f, 5.0f, 0.0f);
-	glm::vec3 dimensions = glm::vec3(1.0f, 1.0f, 1.0f);
+	glm::vec3 dimensions = glm::vec3(5.0f, 3.0f, 2.5f);
     float angle = 0.0f; // Heading direction in radians
     float speed = 2.0f;
     float rotationSpeed = 2.0f;
@@ -72,7 +73,6 @@ struct playerFish {
     struct tooth{
         glm::vec3 pos0, pos1;
     }toothUpperLeft, toothUpperRight, toothLowerLeft, toothLowerRight;
-   
 } playerFish;
 
 // Aquarium elements
@@ -87,7 +87,10 @@ void processInput(GLFWwindow* window, float deltaTime);
 void drawModel(std::string type, const glm::mat4& model, const glm::mat4& view, const glm::mat4& projection, const glm::vec3& color);
 void drawPlayerFish(const glm::vec3& position, float angle, float tailPhase,
                     const glm::mat4& view, const glm::mat4& projection, bool mouthOpen, float deltaTime);
+void drawSeaweed(const Seaweed& seaweed, const glm::mat4& view, const glm::mat4& projection);
+void updateSeaweed(Seaweed& seaweed, float deltaTime);
 void updateSchoolFish(float deltaTime);
+Seaweed createSeaweed(glm::vec3 basePosition, int segmentCount, float swayOffset, float swaySpeed, float scaleDecay, glm::vec3 color);
 void initializeAquarium();
 void cleanup();
 void init();
@@ -189,14 +192,17 @@ int main() {
 		aquariumBaseModel = glm::scale(aquariumBaseModel, glm::vec3(70.0f, 1.0f, 40.0f));
 		drawModel("cube", aquariumBaseModel, view, projection, glm::vec3(0.9f, 0.8f, 0.6f));
         
-        // TODO: Draw seaweeds with hierarchical structure and wave motion
+        // Draw seaweeds with hierarchical structure and wave motion
         // Wave motion is sine wave based on global time and segment phase
         // Each segment sways slightly differently for natural effect
         // E.g. Amplitude * sin(keepingChangingX + delayPhase)
         // delayPhase is different for each segment
         // the deeper the segment is, the larger the delayPhase is.
         // so that you can create a forward wave motion.
-        
+		for (Seaweed& seaweed : seaweeds) {
+			updateSeaweed(seaweed, deltaTime);
+			drawSeaweed(seaweed, view, projection);
+		}
 
         // Draw school of fish
         // The fish movement logic is implemented.
@@ -279,26 +285,27 @@ void processInput(GLFWwindow* window, float deltaTime) {
 	float deltaSpeed = playerFish.speed * deltaTime;
 	glm::vec3 playerShift(0.0f, 0.0f, 0.0f);
 
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
-        playerShift.x += 1.0f;
-    }
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
-        playerShift.x += -1.0f;
-    }
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS){
-        playerShift.z += 1.0f;
-    }
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS){
-		playerShift.z += -1.0f;
-    }
-    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS){
-		playerShift.y += 1.0f;
-    }
-    if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS){
-        playerShift.y += -1.0f;
-    }
+   	bool xUp	= (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS);
+    bool xDown	= (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS);
+    bool yUp	= (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS);
+    bool yDown	= (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS);
+    bool zUp	= (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS);
+    bool zDown	= (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS);
+	if (xUp ^ xDown) {
+		if (xUp) playerShift.x += 1.0f;
+		else	 playerShift.x -= 1.0f;
+	}
+	if (yUp ^ yDown) {
+		if (yUp) playerShift.y += 1.0f;
+		else	 playerShift.y -= 1.0f;
+	}
+	if (zUp ^ zDown) {
+		if (zUp) playerShift.z += 1.0f;
+		else	 playerShift.z -= 1.0f;
+	}
 
-	playerShift = glm::normalize(playerShift) * deltaSpeed;
+	if ((xUp ^ xDown) or (yUp ^ yDown) or (zUp ^ zDown))
+		playerShift = glm::normalize(playerShift) * deltaSpeed;
 
     // Keep fish within aquarium bounds
 	playerFish.position += playerShift;
@@ -383,11 +390,48 @@ void cleanup() {
     schoolFish.clear();
 }
 
+void drawSeaweed(const Seaweed& seaweed, const glm::mat4& view, const glm::mat4& projection) {
+	glm::vec3 currentPosition = seaweed.basePosition;
+	SeaweedSegment* segment = seaweed.rootSegment;
+	while (segment != nullptr) {
+		currentPosition += segment->localPos;
+		glm::mat4 model(1.0f);
+		model = glm::translate(model, currentPosition);
+		model = glm::rotate(model, segment->angle, glm::vec3(0.0f, 0.0f, 1.0f));
+		model = glm::scale(model, segment->scale);
+		drawModel("cube", model, view, projection, segment->color);
+		currentPosition += segment->localPos;
+		cout << currentPosition.x << ' '  << currentPosition.y << ' ' << currentPosition.z << '\n';
+		segment = segment->next;
+	}
+}
+
+void updateSeaweed(Seaweed& seaweed, float deltaTime) {
+	SeaweedSegment* segment = seaweed.rootSegment;
+	while (segment != nullptr) {
+		segment->localPos = glm::vec3(0.0f, 1.0f, 0.0f);
+		segment->localPos.x = segment->swayAmplitude * sin(segment->phase);
+		segment->localPos = glm::vec3(glm::scale(glm::mat4(1.0f), segment->scale) * glm::vec4(segment->localPos, 0.0f)) * 0.5f;
+		segment->angle = atan2(-segment->localPos.x, segment->localPos.y);
+		segment->phase += seaweed.swaySpeed * deltaTime;
+		segment = segment->next;
+	}
+}
+
 void drawPlayerFish(const glm::vec3& position, float angle, float tailPhase,
     const glm::mat4& view, const glm::mat4& projection, bool mouthOpen, float deltaTime) {
-    glm::mat4 model(1.0f);
+	cout
+		<< "drawing player at ("
+		<< position.x << ", "
+		<< position.y << ", "
+		<< position.z << ")" << endl;
 
-    // TODO: Draw body using cube (main body)
+    // Draw body using cube (main body)
+    glm::mat4 bodyModel(1.0f);
+	bodyModel = glm::scale(bodyModel, glm::vec3(5.0f, 3.0f, 2.5f));
+	bodyModel = glm::rotate(bodyModel, angle, glm::vec3(0.0f, 1.0f, 0.0f));
+	bodyModel = glm::translate(bodyModel, position);
+	drawModel("cube", bodyModel, view, projection, glm::vec3(0.4f, 0.4f, 0.6f));
   
     // TODO: Draw head and Mouth using cube with mouth open/close feature
     if (mouthOpen) {
@@ -419,7 +463,6 @@ void drawPlayerFish(const glm::vec3& position, float angle, float tailPhase,
     
     // TODO: Draw tail fin at the end
  }
-
  
 void updateSchoolFish(float deltaTime) {
     for (auto& fish : schoolFish) {
@@ -431,13 +474,40 @@ void updateSchoolFish(float deltaTime) {
         // fish from escaping the visible scene.
         // atan2 calculates the angle of the fish's direction vector on the XZ plane.
         // To make the fish movement natural.
-        if (fish.position.x > AQUARIUM_BOUNDARY - 2.0f || fish.position.x < -AQUARIUM_BOUNDARY + 2.0f) {
+        if (fish.position.x > AQUARIUM_BOUNDARY - 1.0f || fish.position.x < -AQUARIUM_BOUNDARY + 1.0f) {
             fish.direction.x *= -1;
             fish.angle = atan2(-fish.direction.z, fish.direction.x);
         }
     }
 }
 
+Seaweed createSeaweed(glm::vec3 basePosition, int segmentCount, float swayOffset = 0.0f, float swaySpeed = glm::radians(90.0f), float swayAmplitude = 0.05f, float scaleDecay = 0.95f, glm::vec3 color = glm::vec3(0.4f, 0.6f, 0.4f)) {
+	Seaweed newSeaweed;
+	newSeaweed.basePosition = basePosition;
+	newSeaweed.swayOffset = swayOffset;
+	newSeaweed.swaySpeed = swaySpeed;
+
+	glm::vec3 scale = glm::vec3(1.0f, 1.0f, 1.0f);
+	float phase = 0.0f;
+
+	newSeaweed.rootSegment = new SeaweedSegment;
+	SeaweedSegment* segment = newSeaweed.rootSegment;
+	for (int i = 0; i < segmentCount; i++) {
+		segment->color = color;
+		segment->phase = phase;
+		segment->scale = scale;
+		segment->swayAmplitude = swayAmplitude;
+		if (i != segmentCount - 1) {
+			segment->next = new SeaweedSegment;
+		}
+		phase += swayOffset;
+		scale *= scaleDecay;
+//		swayAmplitude *= scaleDecay;
+		segment = segment->next;
+	}
+
+	return newSeaweed;
+}
 
 void initializeAquarium() {
     srand(static_cast<unsigned int>(time(nullptr)));
@@ -474,4 +544,29 @@ void initializeAquarium() {
 		fish.color = glm::vec3(static_cast<float>(rand()) / RAND_MAX, static_cast<float>(rand()) / RAND_MAX, static_cast<float>(rand()) / RAND_MAX);
 		schoolFish.push_back(fish);
 	}
+
+	seaweeds.push_back(createSeaweed(
+		glm::vec3(7.0f, 0.0f, 0.0f),
+		20,
+		glm::radians(30.0f),
+		glm::radians(100.0f),
+		0.20f,
+		0.98f
+	));
+	seaweeds.push_back(createSeaweed(
+		glm::vec3(-7.0f, 0.0f, -10.0f),
+		20,
+		glm::radians(20.0f),
+		glm::radians(240.0f),
+		0.05f,
+		0.98f
+	));
+	seaweeds.push_back(createSeaweed(
+		glm::vec3(-7.0f, 0.0f, 5.0f),
+		15,
+		glm::radians(7.0f),
+		glm::radians(90.0f),
+		0.15f,
+		0.98f
+	));
 }
