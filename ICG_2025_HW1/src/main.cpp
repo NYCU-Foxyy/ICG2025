@@ -15,12 +15,8 @@
 // Settings
 const int INITIAL_SCR_WIDTH = 1280;
 const int INITIAL_SCR_HEIGHT = 720;
-const float AQUARIUM_BOUNDARY = 8.0f;
-const float AQUARIUM_HEIGHT = 7.0f;
-
-// Animation constants
-const float TAIL_ANIMATION_SPEED = 5.0f;
-const float WAVE_FREQUENCY = 1.5f;
+const float AQUARIUM_BOUNDARY = 20.0f;
+const float AQUARIUM_HEIGHT = 20.0f;
 
 int SCR_WIDTH = INITIAL_SCR_WIDTH;
 int SCR_HEIGHT = INITIAL_SCR_HEIGHT;
@@ -63,10 +59,12 @@ struct playerFish {
     glm::vec3 position = glm::vec3(0.0f, 5.0f, 0.0f);
 	glm::vec3 dimensions = glm::vec3(5.0f, 3.0f, 2.5f);
     float angle = 0.0f; // Heading direction in radians
-    float speed = 2.0f;
-    float rotationSpeed = 2.0f;
+    float speed = 5.0f;
+    float rotationSpeed = 30.0f;
     bool mouthOpen = false; 
-    float tailAnimation = 0.0f;
+	float tailAngle = 0.0f;
+    float tailSpeed = 90.0f;
+	float tailAmplitude = 10.0f;
     // for tooth
     float duration = 1.0f;     
     float elapsed = 0.0f;    
@@ -85,11 +83,12 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
 void processInput(GLFWwindow* window, float deltaTime);
 void drawModel(std::string type, const glm::mat4& model, const glm::mat4& view, const glm::mat4& projection, const glm::vec3& color);
-void drawPlayerFish(const glm::vec3& position, float angle, float tailPhase,
+void drawPlayerFish(const glm::vec3& position, float angle, 
                     const glm::mat4& view, const glm::mat4& projection, bool mouthOpen, float deltaTime);
 void drawSeaweed(const Seaweed& seaweed, const glm::mat4& view, const glm::mat4& projection);
 void updateSeaweed(Seaweed& seaweed, float deltaTime);
 void updateSchoolFish(float deltaTime);
+void updatePlayerFish(float deltaTime);
 Seaweed createSeaweed(glm::vec3 basePosition, int segmentCount, float swayOffset, float swaySpeed, float scaleDecay, glm::vec3 color);
 void initializeAquarium();
 void cleanup();
@@ -130,6 +129,7 @@ int main() {
 
     // Enable depth test, face culling
 	glEnable(GL_DEPTH_TEST);
+	glDepthFunc(GL_LEQUAL);
 	glEnable(GL_CULL_FACE);
 	glFrontFace(GL_CCW);
 	glCullFace(GL_BACK);
@@ -146,8 +146,6 @@ int main() {
         float deltaTime = currentFrame - lastFrame;
         lastFrame = currentFrame;
         globalTime = currentFrame;
-
-        playerFish.tailAnimation += deltaTime * TAIL_ANIMATION_SPEED;
 
         // Render background
         glClearColor(0.2f, 0.5f, 0.8f, 1.0f);
@@ -173,8 +171,6 @@ int main() {
         ==============================================================================*/
 
         // Create model, view, and perspective matrix
-
-		glm::mat4 playerFishModel(1.0f);
 		glm::mat4 view = glm::lookAt(
 			glm::vec3(0.0f, 10.0f, 25.0f),
 			glm::vec3(0.0f, 8.0f, 0.0f),
@@ -243,11 +239,13 @@ int main() {
         // For the wave motion of the tail, you can use a sine function based on time,
         // which is provided as playerFish.tailAnimation that would act as tail phase in the drawPlayerFish().
         // To make the tail motion, follow the formula: Amplitude * sin(tailPhase);
-        drawPlayerFish(playerFish.position, playerFish.angle, playerFish.tailAnimation,
+        drawPlayerFish(playerFish.position, playerFish.angle, 
                         view, projection, playerFish.mouthOpen, deltaTime);
 
         // TODO: Implement input processing
         processInput(window, deltaTime);
+
+		updatePlayerFish(deltaTime);
 
         glfwSwapBuffers(window);
         glfwPollEvents();
@@ -315,6 +313,11 @@ void processInput(GLFWwindow* window, float deltaTime) {
 	playerFish.position.z = min(playerFish.position.z, AQUARIUM_BOUNDARY - playerFish.dimensions.z / 2);
 	playerFish.position.y = max(playerFish.position.y, 0 + playerFish.dimensions.y / 2);
 	playerFish.position.y = min(playerFish.position.y, AQUARIUM_HEIGHT - playerFish.dimensions.y / 2);
+
+	if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS)
+		playerFish.rotationSpeed += 360.0f * deltaTime;
+	if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS)
+		playerFish.rotationSpeed += -360.0f * deltaTime;
 }
 
 void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
@@ -401,7 +404,7 @@ void drawSeaweed(const Seaweed& seaweed, const glm::mat4& view, const glm::mat4&
 		model = glm::scale(model, segment->scale);
 		drawModel("cube", model, view, projection, segment->color);
 		currentPosition += segment->localPos;
-		cout << currentPosition.x << ' '  << currentPosition.y << ' ' << currentPosition.z << '\n';
+//		cout << currentPosition.x << ' '  << currentPosition.y << ' ' << currentPosition.z << '\n';
 		segment = segment->next;
 	}
 }
@@ -410,30 +413,31 @@ void updateSeaweed(Seaweed& seaweed, float deltaTime) {
 	SeaweedSegment* segment = seaweed.rootSegment;
 	while (segment != nullptr) {
 		segment->localPos = glm::vec3(0.0f, 1.0f, 0.0f);
-		segment->localPos.x = segment->swayAmplitude * sin(segment->phase);
+		segment->angle = segment->swayAmplitude * sin(segment->phase);
+		segment->localPos = glm::vec3(glm::rotate(glm::mat4(1.0f), segment->angle, glm::vec3(0.0f, 0.0f, 1.0f)) * glm::vec4(segment->localPos, 0.0f));
 		segment->localPos = glm::vec3(glm::scale(glm::mat4(1.0f), segment->scale) * glm::vec4(segment->localPos, 0.0f)) * 0.5f;
-		segment->angle = atan2(-segment->localPos.x, segment->localPos.y);
 		segment->phase += seaweed.swaySpeed * deltaTime;
 		segment = segment->next;
 	}
 }
 
-void drawPlayerFish(const glm::vec3& position, float angle, float tailPhase,
-    const glm::mat4& view, const glm::mat4& projection, bool mouthOpen, float deltaTime) {
+void drawPlayerFish(const glm::vec3& position, float angle, const glm::mat4& view, const glm::mat4& projection, bool mouthOpen, float deltaTime) {
+/*
 	cout
 		<< "drawing player at ("
 		<< position.x << ", "
 		<< position.y << ", "
 		<< position.z << ")" << endl;
+*/
 
     // Draw body using cube (main body)
     glm::mat4 bodyModel(1.0f);
-	bodyModel = glm::scale(bodyModel, glm::vec3(5.0f, 3.0f, 2.5f));
-	bodyModel = glm::rotate(bodyModel, angle, glm::vec3(0.0f, 1.0f, 0.0f));
 	bodyModel = glm::translate(bodyModel, position);
+	bodyModel = glm::rotate(bodyModel, angle, glm::vec3(0.0f, 1.0f, 0.0f));
+	bodyModel = glm::scale(bodyModel, glm::vec3(5.0f, 3.0f, 2.5f));
 	drawModel("cube", bodyModel, view, projection, glm::vec3(0.4f, 0.4f, 0.6f));
   
-    // TODO: Draw head and Mouth using cube with mouth open/close feature
+    // Draw head and Mouth using cube with mouth open/close feature
     if (mouthOpen) {
         // TODO: head and mouth model matrix adjustment
 
@@ -448,20 +452,142 @@ void drawPlayerFish(const glm::vec3& position, float angle, float tailPhase,
         // TODO: Lower teeth left
         
     } else {
-        // TODO: head and mouth model matrix adjustment
+        // head and mouth model matrix adjustment
+		glm::mat4 headModel(1.0f);
+		headModel = glm::translate(headModel, position);
+		headModel = glm::rotate(headModel, angle, glm::vec3(0.0f, 1.0f, 0.0f));
+		headModel = glm::translate(headModel, glm::vec3(3.0f, 0.5f, 0.0f));
+		headModel = glm::rotate(headModel, glm::radians(-15.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+		headModel = glm::scale(headModel, glm::vec3(2.75f, 1.75f, 2.0f));
+		drawModel("cube", headModel, view, projection, glm::vec3(0.4f, 0.4f, 0.6f));
+
+		glm::mat4 mouthModel(1.0f);
+		mouthModel = glm::translate(mouthModel, position);
+		mouthModel = glm::rotate(mouthModel, angle, glm::vec3(0.0f, 1.0f, 0.0f));
+		mouthModel = glm::translate(mouthModel, glm::vec3(2.75f, -0.5f, 0.0f));
+		mouthModel = glm::rotate(mouthModel, glm::radians(7.5f), glm::vec3(0.0f, 0.0f, 1.0f));
+		mouthModel = glm::scale(mouthModel, glm::vec3(2.25f, 1.75f, 1.75f));
+		drawModel("cube", mouthModel, view, projection, glm::vec3(0.95f, 0.95f, 0.95f));
     } 
 
-    // TODO: Draw Eyes
+    // Draw Eyes
+	glm::mat4 leftEyeModel(1.0f);
+	leftEyeModel = glm::translate(leftEyeModel, position);
+	leftEyeModel = glm::rotate(leftEyeModel, angle, glm::vec3(0.0f, 1.0f, 0.0f));
+	leftEyeModel = glm::translate(leftEyeModel, glm::vec3(3.0f, 0.5f, -0.9f));
+	leftEyeModel = glm::scale(leftEyeModel, glm::vec3(0.5f, 0.5f, 0.5f));
+	drawModel("cube", leftEyeModel, view, projection, glm::vec3(0.95f, 0.95f, 0.95f));
  
-    // TODO: Draw Pupils
+	glm::mat4 rightEyeModel(1.0f);
+	rightEyeModel = glm::translate(rightEyeModel, position);
+	rightEyeModel = glm::rotate(rightEyeModel, angle, glm::vec3(0.0f, 1.0f, 0.0f));
+	rightEyeModel = glm::translate(rightEyeModel, glm::vec3(3.0f, 0.5f, 0.9f));
+	rightEyeModel = glm::scale(rightEyeModel, glm::vec3(0.5f, 0.5f, 0.5f));
+	drawModel("cube", rightEyeModel, view, projection, glm::vec3(0.95f, 0.95f, 0.95f));
 
-    // TODO: Draw dorsal fin (top fin)
+    // Draw Pupils
+	glm::mat4 leftPupilModel(1.0f);
+	leftPupilModel = glm::translate(leftPupilModel, position);
+	leftPupilModel = glm::rotate(leftPupilModel, angle, glm::vec3(0.0f, 1.0f, 0.0f));
+	leftPupilModel = glm::translate(leftPupilModel, glm::vec3(3.0f, 0.5f, -1.1f));
+	leftPupilModel = glm::scale(leftPupilModel, glm::vec3(0.25f, 0.25f, 0.25f));
+	drawModel("cube", leftPupilModel, view, projection, glm::vec3(0.0f, 0.0f, 0.0f));
 
-    // TODO: Draw side fins (pectoral fins)
+	glm::mat4 rightPupilModel(1.0f);
+	rightPupilModel = glm::translate(rightPupilModel, position);
+	rightPupilModel = glm::rotate(rightPupilModel, angle, glm::vec3(0.0f, 1.0f, 0.0f));
+	rightPupilModel = glm::translate(rightPupilModel, glm::vec3(3.0f, 0.5f, 1.1f));
+	rightPupilModel = glm::scale(rightPupilModel, glm::vec3(0.25f, 0.25f, 0.25f));
+	drawModel("cube", rightPupilModel, view, projection, glm::vec3(0.0f, 0.0f, 0.0f));
 
-    // TODO: Draw hierarchical animated tail with multiple segments
-    
-    // TODO: Draw tail fin at the end
+    // Draw dorsal fin (top fin)
+	glm::mat4 dorsalFinModel(1.0f);
+	dorsalFinModel = glm::translate(dorsalFinModel, position);
+	dorsalFinModel = glm::rotate(dorsalFinModel, angle, glm::vec3(0.0f, 1.0f, 0.0f));
+	dorsalFinModel = glm::translate(dorsalFinModel, glm::vec3(0.5f, 1.5f, 0.0f));
+	dorsalFinModel = glm::rotate(dorsalFinModel, glm::radians(-50.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+	dorsalFinModel = glm::scale(dorsalFinModel, glm::vec3(3.0f, 1.25f, 0.4f));
+	drawModel("cube", dorsalFinModel, view, projection, glm::vec3(0.4f, 0.4f, 0.6f));
+
+    // Draw side fins (pectoral fins)
+	glm::mat4 leftPectoralFinModel(1.0f);
+	leftPectoralFinModel = glm::translate(leftPectoralFinModel, position);
+	leftPectoralFinModel = glm::rotate(leftPectoralFinModel, angle, glm::vec3(0.0f, 1.0f, 0.0f));
+	leftPectoralFinModel = glm::translate(leftPectoralFinModel, glm::vec3(1.0f, -0.75f, -1.5f));
+	leftPectoralFinModel = glm::rotate(leftPectoralFinModel, glm::radians(-40.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+	leftPectoralFinModel = glm::rotate(leftPectoralFinModel, glm::radians(25.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+	leftPectoralFinModel = glm::scale(leftPectoralFinModel, glm::vec3(3.0f, 0.4f, 1.25f));
+	drawModel("cube", leftPectoralFinModel, view, projection, glm::vec3(0.4, 0.4f, 0.6f));
+
+	glm::mat4 rightPectoralFinModel(1.0f);
+	rightPectoralFinModel = glm::translate(rightPectoralFinModel, position);
+	rightPectoralFinModel = glm::rotate(rightPectoralFinModel, angle, glm::vec3(0.0f, 1.0f, 0.0f));
+	rightPectoralFinModel = glm::translate(rightPectoralFinModel, glm::vec3(1.0f, -0.75f, 1.5f));
+	rightPectoralFinModel = glm::rotate(rightPectoralFinModel, glm::radians(40.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+	rightPectoralFinModel = glm::rotate(rightPectoralFinModel, glm::radians(25.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+	rightPectoralFinModel = glm::scale(rightPectoralFinModel, glm::vec3(3.0f, 0.4f, 1.25f));
+	drawModel("cube", rightPectoralFinModel, view, projection, glm::vec3(0.4, 0.4f, 0.6f));
+
+    // Draw hierarchical animated tail with multiple segments
+	float tailAngle = glm::radians(playerFish.tailAmplitude) * sin(playerFish.tailAngle);
+	glm::vec3 tailRootPosition(-2.0f, 0.0f, 0.0f);
+	glm::vec3 tailSegmentOffset1(-1.0f, 0.0f, 0.0f);
+	tailSegmentOffset1 = glm::vec3(glm::rotate(
+		glm::mat4(1.0f),
+		tailAngle,
+		glm::vec3(tailRootPosition.x, 1.0f, 0.0f)
+	) * glm::vec4(tailSegmentOffset1, 0.0f));
+	glm::mat4 tailSegmentModel1(1.0f);
+	tailSegmentModel1 = glm::translate(tailSegmentModel1, position);
+	tailSegmentModel1 = glm::rotate(tailSegmentModel1, angle, glm::vec3(0.0f, 1.0f, 0.0f));
+	tailSegmentModel1 = glm::translate(tailSegmentModel1, tailRootPosition);
+	tailSegmentModel1 = glm::rotate(tailSegmentModel1, tailAngle, glm::vec3(0.0f, 1.0f, 0.0f));
+	tailSegmentModel1 = glm::translate(tailSegmentModel1, tailSegmentOffset1);
+	tailSegmentModel1 = glm::scale(tailSegmentModel1, glm::vec3(1.5f, 1.25f, 2.0f));
+	drawModel("cube", tailSegmentModel1, view, projection, glm::vec3(0.4, 0.4, 0.6f));
+
+	glm::vec3 tailSegmentOffset2(-2.0f, 0.0f, 0.0f);
+	tailSegmentOffset2 = glm::vec3(glm::rotate(
+		glm::mat4(1.0f),
+		tailAngle,
+		glm::vec3(tailRootPosition.x, 1.0f, 0.0f)
+	) * glm::vec4(tailSegmentOffset2, 0.0f));
+	glm::mat4 tailSegmentModel2(1.0f);
+	tailSegmentModel2 = glm::translate(tailSegmentModel2, position);
+	tailSegmentModel2 = glm::rotate(tailSegmentModel2, angle, glm::vec3(0.0f, 1.0f, 0.0f));
+	tailSegmentModel2 = glm::translate(tailSegmentModel2, tailRootPosition);
+	tailSegmentModel2 = glm::rotate(tailSegmentModel2, tailAngle, glm::vec3(0.0f, 1.0f, 0.0f));
+	tailSegmentModel2 = glm::translate(tailSegmentModel2, tailSegmentOffset1);
+	tailSegmentModel2 = glm::rotate(tailSegmentModel2, tailAngle, glm::vec3(0.0f, 1.0f, 0.0f));
+	tailSegmentModel2 = glm::translate(tailSegmentModel2, tailSegmentOffset2);
+	tailSegmentModel2 = glm::scale(tailSegmentModel2, glm::vec3(3.5f, 1.0f, 1.75f));
+	drawModel("cube", tailSegmentModel2, view, projection, glm::vec3(0.4, 0.4, 0.6f));
+
+	glm::mat4 tailFinModel;
+
+	glm::vec3 tailSegmentOffset3(-3.0f, 0.0f, 0.0f);
+	tailSegmentOffset3 = glm::vec3(glm::rotate(
+		glm::mat4(1.0f),
+		tailAngle,
+		glm::vec3(tailRootPosition.x, 1.0f, 0.0f)
+	) * glm::vec4(tailSegmentOffset3, 0.0f));
+	glm::mat4 tailSegmentModel3(1.0f);
+	tailSegmentModel3 = glm::translate(tailSegmentModel3, position);
+	tailSegmentModel3 = glm::rotate(tailSegmentModel3, angle, glm::vec3(0.0f, 1.0f, 0.0f));
+	tailSegmentModel3 = glm::translate(tailSegmentModel3, tailRootPosition);
+	tailSegmentModel3 = glm::rotate(tailSegmentModel3, tailAngle, glm::vec3(0.0f, 1.0f, 0.0f));
+	tailSegmentModel3 = glm::translate(tailSegmentModel3, tailSegmentOffset1);
+	tailSegmentModel3 = glm::rotate(tailSegmentModel3, tailAngle, glm::vec3(0.0f, 1.0f, 0.0f));
+	tailSegmentModel3 = glm::translate(tailSegmentModel3, tailSegmentOffset2);
+	tailSegmentModel3 = glm::rotate(tailSegmentModel3, tailAngle, glm::vec3(0.0f, 1.0f, 0.0f));
+	tailSegmentModel3 = glm::translate(tailSegmentModel3, tailSegmentOffset3);
+	tailFinModel = glm::translate(tailSegmentModel3, tailSegmentOffset3 * 0.5f);
+	tailSegmentModel3 = glm::scale(tailSegmentModel3, glm::vec3(3.25f, 0.75f, 1.25f));
+	drawModel("cube", tailSegmentModel3, view, projection, glm::vec3(0.4, 0.4, 0.6f));
+   
+    // Draw tail fin at the end
+	tailFinModel = glm::scale(tailFinModel, glm::vec3(1.5f, 4.0f, 0.4f));
+	drawModel("cube", tailFinModel, view, projection, glm::vec3(0.4, 0.4, 0.6f));
  }
  
 void updateSchoolFish(float deltaTime) {
@@ -480,8 +606,12 @@ void updateSchoolFish(float deltaTime) {
         }
     }
 }
+void updatePlayerFish(float deltaTime) {
+	playerFish.angle += glm::radians(playerFish.rotationSpeed * deltaTime);
+	playerFish.tailAngle += glm::radians(playerFish.tailSpeed * deltaTime);
+}
 
-Seaweed createSeaweed(glm::vec3 basePosition, int segmentCount, float swayOffset = 0.0f, float swaySpeed = glm::radians(90.0f), float swayAmplitude = 0.05f, float scaleDecay = 0.95f, glm::vec3 color = glm::vec3(0.4f, 0.6f, 0.4f)) {
+Seaweed createSeaweed(glm::vec3 basePosition, int segmentCount, float swayOffset = 0.0f, float swaySpeed = glm::radians(90.0f), float swayAmplitude = glm::radians(15.0f), float scaleDecay = 0.95f, glm::vec3 color = glm::vec3(0.4f, 0.6f, 0.4f)) {
 	Seaweed newSeaweed;
 	newSeaweed.basePosition = basePosition;
 	newSeaweed.swayOffset = swayOffset;
@@ -502,7 +632,7 @@ Seaweed createSeaweed(glm::vec3 basePosition, int segmentCount, float swayOffset
 		}
 		phase += swayOffset;
 		scale *= scaleDecay;
-//		swayAmplitude *= scaleDecay;
+		swayAmplitude *= scaleDecay;
 		segment = segment->next;
 	}
 
@@ -550,7 +680,7 @@ void initializeAquarium() {
 		20,
 		glm::radians(30.0f),
 		glm::radians(100.0f),
-		0.20f,
+		glm::radians(25.0f),
 		0.98f
 	));
 	seaweeds.push_back(createSeaweed(
@@ -558,7 +688,7 @@ void initializeAquarium() {
 		20,
 		glm::radians(20.0f),
 		glm::radians(240.0f),
-		0.05f,
+		glm::radians(15.0f),
 		0.98f
 	));
 	seaweeds.push_back(createSeaweed(
@@ -566,7 +696,7 @@ void initializeAquarium() {
 		15,
 		glm::radians(7.0f),
 		glm::radians(90.0f),
-		0.15f,
+		glm::radians(20.0f),
 		0.98f
 	));
 }
