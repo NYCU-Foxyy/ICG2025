@@ -213,7 +213,7 @@ int main() {
         // Update aquarium elements
         updateSchoolFish(deltaTime);
 
-        // TODO: Draw Player Fish
+        // Draw Player Fish
         // You can use the provided function drawPlayerFish() or implement your own version.
         // The key idea of hierarchy is to reuse the model matrix to the children.
         // E.g. 
@@ -242,7 +242,7 @@ int main() {
         drawPlayerFish(playerFish.position, playerFish.angle, 
                         view, projection, playerFish.mouthOpen, deltaTime);
 
-        // TODO: Implement input processing
+        // Implement input processing
         processInput(window, deltaTime);
 
 		updatePlayerFish(deltaTime);
@@ -321,18 +321,19 @@ void processInput(GLFWwindow* window, float deltaTime) {
 }
 
 void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
-    // The action is one of GLFW_PRESS, GLFW_REPEAT or GLFW_RELEASE. 
+    // The action will be one of GLFW_PRESS, GLFW_REPEAT or GLFW_RELEASE. 
     // Events with GLFW_PRESS and GLFW_RELEASE actions are emitted for every key press.
-    // Most keys will also emit events with GLFW_REPEAT actions while a key is held down.
+    // Most keypresses emits events with GLFW_REPEAT actions while a key is held down.
     // https://www.glfw.org/docs/3.3/input_guide.html
     
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
         glfwSetWindowShouldClose(window, true);
     }
-
+	//
     // Implement mouth toggle logic
 	if (key == GLFW_KEY_M && action == GLFW_PRESS) {
 		playerFish.mouthOpen = not playerFish.mouthOpen;
+		playerFish.elapsed = 0.0f;
 	}
 }
 
@@ -430,7 +431,7 @@ void drawPlayerFish(const glm::vec3& position, float angle, const glm::mat4& vie
 		<< position.z << ")" << endl;
 */
 
-    // Draw body using cube (main body)
+    // Draw body with cube (main body)
     glm::mat4 bodyModel(1.0f);
 	bodyModel = glm::translate(bodyModel, position);
 	bodyModel = glm::rotate(bodyModel, angle, glm::vec3(0.0f, 1.0f, 0.0f));
@@ -439,18 +440,98 @@ void drawPlayerFish(const glm::vec3& position, float angle, const glm::mat4& vie
   
     // Draw head and Mouth using cube with mouth open/close feature
     if (mouthOpen) {
-        // TODO: head and mouth model matrix adjustment
+        // head and mouth model matrix adjustment
+		glm::mat4 headModel(1.0f);
+		headModel = glm::translate(headModel, position);
+		headModel = glm::rotate(headModel, angle, glm::vec3(0.0f, 1.0f, 0.0f));
+		headModel = glm::translate(headModel, glm::vec3(3.0f, 1.5f, 0.0f));
+		headModel = glm::rotate(headModel, glm::radians(30.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+		headModel = glm::scale(headModel, glm::vec3(2.75f, 1.75f, 2.0f));
+		drawModel("cube", headModel, view, projection, glm::vec3(0.4f, 0.4f, 0.6f));
 
-        // TODO: Calculate elapse time for tooth animation
-       
-        // TODO: Upper teeth right
+		glm::mat4 mouthModel(1.0f);
+		mouthModel = glm::translate(mouthModel, position);
+		mouthModel = glm::rotate(mouthModel, angle, glm::vec3(0.0f, 1.0f, 0.0f));
+		mouthModel = glm::translate(mouthModel, glm::vec3(2.75f, -1.5f, 0.0f));
+		mouthModel = glm::rotate(mouthModel, glm::radians(-7.5f), glm::vec3(0.0f, 0.0f, 1.0f));
+		mouthModel = glm::scale(mouthModel, glm::vec3(2.25f, 1.75f, 1.75f));
+		drawModel("cube", mouthModel, view, projection, glm::vec3(0.95f, 0.95f, 0.95f));
+
+		// Draw Eyes
+		glm::mat4 leftEyeModel(1.0f);
+		leftEyeModel = glm::translate(leftEyeModel, position);
+		leftEyeModel = glm::rotate(leftEyeModel, angle, glm::vec3(0.0f, 1.0f, 0.0f));
+		leftEyeModel = glm::translate(leftEyeModel, glm::vec3(3.0f, 1.5f, -0.9f));
+		leftEyeModel = glm::scale(leftEyeModel, glm::vec3(0.5f, 0.5f, 0.5f));
+		drawModel("cube", leftEyeModel, view, projection, glm::vec3(0.95f, 0.95f, 0.95f));
+	 
+		glm::mat4 rightEyeModel(1.0f);
+		rightEyeModel = glm::translate(rightEyeModel, position);
+		rightEyeModel = glm::rotate(rightEyeModel, angle, glm::vec3(0.0f, 1.0f, 0.0f));
+		rightEyeModel = glm::translate(rightEyeModel, glm::vec3(3.0f, 1.5f, 0.9f));
+		rightEyeModel = glm::scale(rightEyeModel, glm::vec3(0.5f, 0.5f, 0.5f));
+		drawModel("cube", rightEyeModel, view, projection, glm::vec3(0.95f, 0.95f, 0.95f));
+
+		// Draw Pupils
+		glm::mat4 leftPupilModel(1.0f);
+		leftPupilModel = glm::translate(leftPupilModel, position);
+		leftPupilModel = glm::rotate(leftPupilModel, angle, glm::vec3(0.0f, 1.0f, 0.0f));
+		leftPupilModel = glm::translate(leftPupilModel, glm::vec3(3.0f, 1.5f, -1.1f));
+		leftPupilModel = glm::scale(leftPupilModel, glm::vec3(0.25f, 0.25f, 0.25f));
+		drawModel("cube", leftPupilModel, view, projection, glm::vec3(0.0f, 0.0f, 0.0f));
+
+		glm::mat4 rightPupilModel(1.0f);
+		rightPupilModel = glm::translate(rightPupilModel, position);
+		rightPupilModel = glm::rotate(rightPupilModel, angle, glm::vec3(0.0f, 1.0f, 0.0f));
+		rightPupilModel = glm::translate(rightPupilModel, glm::vec3(3.0f, 1.5f, 1.1f));
+		rightPupilModel = glm::scale(rightPupilModel, glm::vec3(0.25f, 0.25f, 0.25f));
+		drawModel("cube", rightPupilModel, view, projection, glm::vec3(0.0f, 0.0f, 0.0f));
+
+		glm::vec3 toothScale = glm::mix(
+			glm::vec3(0.4, 1.0, 0.4),
+			glm::vec3(0.4, 3.0, 0.4),
+			playerFish.elapsed / playerFish.duration
+		);
+
+        // TODO: Upper right tooth 
+		glm::mat4 upperRightToothModel(1.0f);
+		upperRightToothModel = glm::translate(upperRightToothModel, position);
+		upperRightToothModel = glm::rotate(upperRightToothModel, angle, glm::vec3(0.0f, 1.0f, 0.0f));
+		upperRightToothModel = glm::translate(upperRightToothModel, glm::vec3(4.0f, 1.5f, 0.5f));
+		upperRightToothModel = glm::rotate(upperRightToothModel, glm::radians(-150.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+		upperRightToothModel = glm::translate(upperRightToothModel, glm::vec3(0.0f, (toothScale.y - 1.0f) / 2.0f, 0.0f));
+		upperRightToothModel = glm::scale(upperRightToothModel, toothScale);
+		drawModel("cube", upperRightToothModel, view, projection, glm::vec3(1.0f, 1.0f, 1.0f));
         
-        // TODO: Upper teeth left
+        // TODO: Upper left tooth
+		glm::mat4 upperLeftToothModel(1.0f);
+		upperLeftToothModel = glm::translate(upperLeftToothModel, position);
+		upperLeftToothModel = glm::rotate(upperLeftToothModel, angle, glm::vec3(0.0f, 1.0f, 0.0f));
+		upperLeftToothModel = glm::translate(upperLeftToothModel, glm::vec3(4.0f, 1.5f, -0.5f));
+		upperLeftToothModel = glm::rotate(upperLeftToothModel, glm::radians(-150.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+		upperLeftToothModel = glm::translate(upperLeftToothModel, glm::vec3(0.0f, (toothScale.y - 1.0f) / 2.0f, 0.0f));
+		upperLeftToothModel = glm::scale(upperLeftToothModel, toothScale);
+		drawModel("cube", upperLeftToothModel, view, projection, glm::vec3(1.0f, 1.0f, 1.0f));
       
-        // TODO: Lower teeth right 
+        // TODO: Lower right tooth 
+		glm::mat4 lowerRightToothModel(1.0f);
+		lowerRightToothModel = glm::translate(lowerRightToothModel, position);
+		lowerRightToothModel = glm::rotate(lowerRightToothModel, angle, glm::vec3(0.0f, 1.0f, 0.0f));
+		lowerRightToothModel = glm::translate(lowerRightToothModel, glm::vec3(3.5f, -1.5f, 0.5f));
+		lowerRightToothModel = glm::rotate(lowerRightToothModel, glm::radians(-7.5f), glm::vec3(0.0f, 0.0f, 1.0f));
+		lowerRightToothModel = glm::translate(lowerRightToothModel, glm::vec3(0.0f, (toothScale.y - 1.0f) / 2.0f, 0.0f));
+		lowerRightToothModel = glm::scale(lowerRightToothModel, toothScale);
+		drawModel("cube", lowerRightToothModel, view, projection, glm::vec3(1.0f, 1.0f, 1.0f));
        
-        // TODO: Lower teeth left
-        
+        // TODO: Lower left tooth
+		glm::mat4 lowerLeftToothModel(1.0f);
+		lowerLeftToothModel = glm::translate(lowerLeftToothModel, position);
+		lowerLeftToothModel = glm::rotate(lowerLeftToothModel, angle, glm::vec3(0.0f, 1.0f, 0.0f));
+		lowerLeftToothModel = glm::translate(lowerLeftToothModel, glm::vec3(3.5f, -1.5f, -0.5f));
+		lowerLeftToothModel = glm::rotate(lowerLeftToothModel, glm::radians(-7.5f), glm::vec3(0.0f, 0.0f, 1.0f));
+		lowerLeftToothModel = glm::translate(lowerLeftToothModel, glm::vec3(0.0f, (toothScale.y - 1.0f) / 2.0f, 0.0f));
+		lowerLeftToothModel = glm::scale(lowerLeftToothModel, toothScale);
+		drawModel("cube", lowerLeftToothModel, view, projection, glm::vec3(1.0f, 1.0f, 1.0f));
     } else {
         // head and mouth model matrix adjustment
 		glm::mat4 headModel(1.0f);
@@ -468,37 +549,37 @@ void drawPlayerFish(const glm::vec3& position, float angle, const glm::mat4& vie
 		mouthModel = glm::rotate(mouthModel, glm::radians(7.5f), glm::vec3(0.0f, 0.0f, 1.0f));
 		mouthModel = glm::scale(mouthModel, glm::vec3(2.25f, 1.75f, 1.75f));
 		drawModel("cube", mouthModel, view, projection, glm::vec3(0.95f, 0.95f, 0.95f));
+
+		// Draw Eyes
+		glm::mat4 leftEyeModel(1.0f);
+		leftEyeModel = glm::translate(leftEyeModel, position);
+		leftEyeModel = glm::rotate(leftEyeModel, angle, glm::vec3(0.0f, 1.0f, 0.0f));
+		leftEyeModel = glm::translate(leftEyeModel, glm::vec3(3.0f, 0.5f, -0.9f));
+		leftEyeModel = glm::scale(leftEyeModel, glm::vec3(0.5f, 0.5f, 0.5f));
+		drawModel("cube", leftEyeModel, view, projection, glm::vec3(0.95f, 0.95f, 0.95f));
+	 
+		glm::mat4 rightEyeModel(1.0f);
+		rightEyeModel = glm::translate(rightEyeModel, position);
+		rightEyeModel = glm::rotate(rightEyeModel, angle, glm::vec3(0.0f, 1.0f, 0.0f));
+		rightEyeModel = glm::translate(rightEyeModel, glm::vec3(3.0f, 0.5f, 0.9f));
+		rightEyeModel = glm::scale(rightEyeModel, glm::vec3(0.5f, 0.5f, 0.5f));
+		drawModel("cube", rightEyeModel, view, projection, glm::vec3(0.95f, 0.95f, 0.95f));
+
+		// Draw Pupils
+		glm::mat4 leftPupilModel(1.0f);
+		leftPupilModel = glm::translate(leftPupilModel, position);
+		leftPupilModel = glm::rotate(leftPupilModel, angle, glm::vec3(0.0f, 1.0f, 0.0f));
+		leftPupilModel = glm::translate(leftPupilModel, glm::vec3(3.0f, 0.5f, -1.1f));
+		leftPupilModel = glm::scale(leftPupilModel, glm::vec3(0.25f, 0.25f, 0.25f));
+		drawModel("cube", leftPupilModel, view, projection, glm::vec3(0.0f, 0.0f, 0.0f));
+
+		glm::mat4 rightPupilModel(1.0f);
+		rightPupilModel = glm::translate(rightPupilModel, position);
+		rightPupilModel = glm::rotate(rightPupilModel, angle, glm::vec3(0.0f, 1.0f, 0.0f));
+		rightPupilModel = glm::translate(rightPupilModel, glm::vec3(3.0f, 0.5f, 1.1f));
+		rightPupilModel = glm::scale(rightPupilModel, glm::vec3(0.25f, 0.25f, 0.25f));
+		drawModel("cube", rightPupilModel, view, projection, glm::vec3(0.0f, 0.0f, 0.0f));
     } 
-
-    // Draw Eyes
-	glm::mat4 leftEyeModel(1.0f);
-	leftEyeModel = glm::translate(leftEyeModel, position);
-	leftEyeModel = glm::rotate(leftEyeModel, angle, glm::vec3(0.0f, 1.0f, 0.0f));
-	leftEyeModel = glm::translate(leftEyeModel, glm::vec3(3.0f, 0.5f, -0.9f));
-	leftEyeModel = glm::scale(leftEyeModel, glm::vec3(0.5f, 0.5f, 0.5f));
-	drawModel("cube", leftEyeModel, view, projection, glm::vec3(0.95f, 0.95f, 0.95f));
- 
-	glm::mat4 rightEyeModel(1.0f);
-	rightEyeModel = glm::translate(rightEyeModel, position);
-	rightEyeModel = glm::rotate(rightEyeModel, angle, glm::vec3(0.0f, 1.0f, 0.0f));
-	rightEyeModel = glm::translate(rightEyeModel, glm::vec3(3.0f, 0.5f, 0.9f));
-	rightEyeModel = glm::scale(rightEyeModel, glm::vec3(0.5f, 0.5f, 0.5f));
-	drawModel("cube", rightEyeModel, view, projection, glm::vec3(0.95f, 0.95f, 0.95f));
-
-    // Draw Pupils
-	glm::mat4 leftPupilModel(1.0f);
-	leftPupilModel = glm::translate(leftPupilModel, position);
-	leftPupilModel = glm::rotate(leftPupilModel, angle, glm::vec3(0.0f, 1.0f, 0.0f));
-	leftPupilModel = glm::translate(leftPupilModel, glm::vec3(3.0f, 0.5f, -1.1f));
-	leftPupilModel = glm::scale(leftPupilModel, glm::vec3(0.25f, 0.25f, 0.25f));
-	drawModel("cube", leftPupilModel, view, projection, glm::vec3(0.0f, 0.0f, 0.0f));
-
-	glm::mat4 rightPupilModel(1.0f);
-	rightPupilModel = glm::translate(rightPupilModel, position);
-	rightPupilModel = glm::rotate(rightPupilModel, angle, glm::vec3(0.0f, 1.0f, 0.0f));
-	rightPupilModel = glm::translate(rightPupilModel, glm::vec3(3.0f, 0.5f, 1.1f));
-	rightPupilModel = glm::scale(rightPupilModel, glm::vec3(0.25f, 0.25f, 0.25f));
-	drawModel("cube", rightPupilModel, view, projection, glm::vec3(0.0f, 0.0f, 0.0f));
 
     // Draw dorsal fin (top fin)
 	glm::mat4 dorsalFinModel(1.0f);
@@ -609,6 +690,9 @@ void updateSchoolFish(float deltaTime) {
 void updatePlayerFish(float deltaTime) {
 	playerFish.angle += glm::radians(playerFish.rotationSpeed * deltaTime);
 	playerFish.tailAngle += glm::radians(playerFish.tailSpeed * deltaTime);
+	playerFish.elapsed += deltaTime;
+	if (playerFish.elapsed > playerFish.duration)
+		playerFish.elapsed -= playerFish.elapsed / playerFish.duration * playerFish.duration;
 }
 
 Seaweed createSeaweed(glm::vec3 basePosition, int segmentCount, float swayOffset = 0.0f, float swaySpeed = glm::radians(90.0f), float swayAmplitude = glm::radians(15.0f), float scaleDecay = 0.95f, glm::vec3 color = glm::vec3(0.4f, 0.6f, 0.4f)) {
@@ -677,7 +761,7 @@ void initializeAquarium() {
 
 	seaweeds.push_back(createSeaweed(
 		glm::vec3(7.0f, 0.0f, 0.0f),
-		20,
+		10,
 		glm::radians(30.0f),
 		glm::radians(100.0f),
 		glm::radians(25.0f),
