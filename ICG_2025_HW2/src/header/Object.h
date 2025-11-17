@@ -27,8 +27,8 @@ public:
 	}
 
 private:
-	unsigned int VAO;
-	int vertex_cnt;
+	//unsigned int VAO;
+	//int vertex_cnt;
 
 	void loadOBJ(const string& filename) {
 		vector<tinyobj::shape_t> shapes;

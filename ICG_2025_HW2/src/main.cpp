@@ -7,9 +7,12 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <filesystem>
 
 #include "./header/Object.h"
 #include "./header/stb_image.h"
+
+using namespace std;
 
 void framebufferSizeCallback(GLFWwindow *window, int width, int height);
 void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods);
@@ -17,6 +20,7 @@ unsigned int createShader(const string &filename, const string &type);
 unsigned int createProgram(unsigned int vertexShader, unsigned int fragmentShader);
 unsigned int modelVAO(Object &model);
 unsigned int loadTexture(const char *tFileName);
+string readTextFile(const string &filename);
 void init();
 
 // settings
@@ -68,7 +72,7 @@ int main() {
 #ifdef __APPLE__
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 #endif
-    /* TODO#0: Change window title to "HW2 - [your student id]"
+    /* Done#0: Change window title to "HW2 - [your student id]"
      *        Ex. HW2-112550000
      */
 
@@ -90,10 +94,10 @@ int main() {
         return -1;
     }
 
-    // TODO#1: Finish function createShader
-    // TODO#2: Finish function createProgram
-    // TODO#3: Finish function modelVAO
-    // TODO#4: Finish function loadTexture
+    // Done#1: Finish function createShader
+    // Done#2: Finish function createProgram
+    // Done#3: Finish function modelVAO
+    // Done#4: Finish function loadTexture
     // You can find the above functions right below the main function
 
     // Initialize Object, Shader, Texture, VAO, VBO
@@ -214,7 +218,7 @@ void framebufferSizeCallback(GLFWwindow *window, int width, int height) {
     SCR_HEIGHT = height;
 }
 
-/* TODO#1: createShader
+/* Done#1: createShader
  * input:
  *      filename: shader file name
  *      type: shader type, "vert" means vertex shader, "frag" means fragment shader
@@ -223,9 +227,18 @@ void framebufferSizeCallback(GLFWwindow *window, int width, int height) {
  *      glCreateShader, glShaderSource, glCompileShader
  */
 unsigned int createShader(const string &filename, const string &type) {
+	unsigned int shader;
+	if (type == "vert") shader = glCreateShader(GL_VERTEX_SHADER);
+	if (type == "frag") shader = glCreateShader(GL_FRAGMENT_SHADER);
+	string fileContent = readTextFile(filename);
+	GLchar const* files[] = { fileContent.c_str() };
+	GLint lengths[]       = { fileContent.size() };
+	glShaderSource(shader, 1, files, lengths);
+	glCompileShader(shader);
+	return shader;
 }
 
-/* TODO#2: createProgram
+/* Done#2: createProgram
  * input:
  *      vertexShader: vertex shader object
  *      fragmentShader: fragment shader object
@@ -234,9 +247,14 @@ unsigned int createShader(const string &filename, const string &type) {
  *      glCreateProgram, glAttachShader, glLinkProgram, glDetachShader
  */
 unsigned int createProgram(unsigned int vertexShader, unsigned int fragmentShader) {
+	unsigned int program = glCreateProgram();
+	glAttachShader(program, vertexShader);
+	glAttachShader(program, fragmentShader);
+	glLinkProgram(program);
+	return program;
 }
 
-/* TODO#3: modelVAO
+/* Done#3: modelVAO
  * input:
  *      model: Object you want to render
  * output: VAO
@@ -245,9 +263,36 @@ unsigned int createProgram(unsigned int vertexShader, unsigned int fragmentShade
  *      glVertexAttribPointer, glEnableVertexAttribArray,
  */
 unsigned int modelVAO(Object &model) {
+	unsigned int VAO;
+	glGenVertexArrays(1, &VAO);
+	glBindVertexArray(VAO);
+
+	unsigned int VBO[3];
+	glGenBuffers(model.position.size(), &VBO[0]);
+	glBindBuffer(GL_ARRAY_BUFFER, VBO[0]);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(GL_FLOAT) * model.position.size(), &model.position[0], GL_STATIC_DRAW);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(GL_FLOAT) * 3, 0);
+	glEnableVertexAttribArray(0);
+	glBindBuffer(GL_ARRAY_BUFFER, VBO[0]);
+
+	glBindBuffer(GL_ARRAY_BUFFER, VBO[1]);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(GL_FLOAT) * model.normals.size(), &model.normals[0], GL_STATIC_DRAW);
+	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(GL_FLOAT) * 3, 0);
+	glEnableVertexAttribArray(1);
+	glBindBuffer(GL_ARRAY_BUFFER, VBO[0]);
+	
+	glBindBuffer(GL_ARRAY_BUFFER, VBO[2]);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(GL_FLOAT) * model.texcoords.size(), &model.texcoords[0], GL_STATIC_DRAW);
+	glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(GL_FLOAT) * 2, 0);
+	glEnableVertexAttribArray(2);
+
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindVertexArray(0);
+
+	return VAO;
 }
 
-/* TODO#4: loadTexture
+/* Done#4: loadTexture
  * input:
  *      filename: texture file name
  * output: texture object
@@ -255,6 +300,26 @@ unsigned int modelVAO(Object &model) {
  *      glEnable, glGenTextures, glBindTexture, glTexParameteri, glTexImage2D
  */
 unsigned int loadTexture(const string &filename) {
+	unsigned int texture;
+	glEnable(GL_TEXTURE_2D);
+	glGenTextures(1, &texture);
+	glBindTexture(GL_TEXTURE_2D, texture);
+	
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+	// get image data
+	int width, height, channels;
+	unsigned char *img = stbi_load(filename.c_str(), &width, &height, &channels, 0);
+
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, img);
+	glGenerateMipmap(GL_TEXTURE_2D);
+
+	stbi_image_free(img);
+
+	return texture;
 }
 
 void init() {
@@ -290,3 +355,9 @@ void init() {
     groundVAO = modelVAO(*groundObject);
 }
 
+string readTextFile(const string &filename) {
+	ifstream ifs(filename);
+	ostringstream ss;
+	ss << ifs.rdbuf();
+	return ss.str();
+}
