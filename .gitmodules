@@ -1,0 +1,3 @@
+[submodule "ICG_2025_HW2/extern/glm"]
+	path = ICG_2025_HW2/extern/glm
+	url = https://github.com/g-truc/glm.git
