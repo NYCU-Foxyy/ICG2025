@@ -15,7 +15,7 @@ uniform float squeezeFactor;
 
 void main()
 {
-    // TODO: Implement squeeze effect
+    // Done: Implement squeeze effect
 	//   1. Adjust the vertex position to create a squeeze effect based on squeezeFactor.
 	//   2. Set gl_Position to be the multiplication of the perspective matrix (projection),
 	//		view matrix (view), model matrix (model) and the adjusted vertex position.

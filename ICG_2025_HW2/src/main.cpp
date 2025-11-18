@@ -247,7 +247,7 @@ int main() {
         dt = currentTime - lastTime;
         lastTime = currentTime;
 
-        /* TODO#7: Update "revolveFishDegree", "rotateColumnDegree", "rotateFishDegree", 
+        /* Done#7: Update "revolveFishDegree", "rotateColumnDegree", "rotateFishDegree", 
          *          "fishHeight", "heightDir", 
          *          "squeezeFactor", "breathingColor", "intensity"
          */
@@ -281,7 +281,7 @@ void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods
     // Most keys will also emit events with GLFW_REPEAT actions while a key is held down.
     // https://www.glfw.org/docs/3.3/input_guide.html
 
-    /* TODO#8: Key callback 
+    /* Done#8: Key callback 
     *    1. Press 'r' to rotate the fish.
     *    2. Press 's' to squeeze the fish.
     *    3. Press 'b' to make the breathing light.

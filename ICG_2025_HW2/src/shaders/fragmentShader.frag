@@ -12,7 +12,7 @@ uniform bool useGradient;
 
 void main()
 {
-    // TODO: Implement Breathing Light Effect
+    // Done: Implement Breathing Light Effect
 	//   1. Retrieve the color from the texture at texCoord.
 	//   2. Set FragColor to be the texture color * (breathingColor * intensity)
 	//   Note: Ensure FragColor is appropriately set for both breathing light and normal cases.
