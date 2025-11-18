@@ -133,7 +133,6 @@ int main() {
 	GLint squeezeFactorLocation = glGetUniformLocation(shaderProgram, "squeezeFactor");
 	GLint intensityLocation = glGetUniformLocation(shaderProgram, "intensity");
 	GLint breathingColorLocation = glGetUniformLocation(shaderProgram, "breathingColor");
-	GLint outTextureLocation = glGetUniformLocation(shaderProgram, "ourTexture");
 
     // render loop
     while (!glfwWindowShouldClose(window)) {
@@ -159,6 +158,19 @@ int main() {
          *    glUniformMatrix4fv, glUniform1f, glUniform3fv
          *    glActiveTexture, glBindTexture, glBindVertexArray, glDrawArrays
          */
+		
+		glm::scale(groundModel, glm::vec3(35, 1, 25));
+		glm::translate(groundModel, glm::vec3(0, -5, 8));
+		glUniformMatrix4fv(modelLocation, 1, GL_FALSE, value_ptr(groundModel));
+		glUniformMatrix4fv(viewLocation, 1, GL_FALSE, value_ptr(view));
+		glUniformMatrix4fv(projectionLocation, 1, GL_FALSE, value_ptr(projection));
+		glUniform1f(squeezeFactorLocation, squeezeFactor);
+		glUniform1fv(breathingColorLocation, 3, value_ptr(breathingColor));
+		glUniform1f(intensityLocation, intensity);
+		glBindTexture(GL_TEXTURE_2D, groundTexture);
+		glBindVertexArray(groundVAO);
+		glDrawElements(GL_TRIANGLES, groundObject->positions.size() / 3, GL_FLOAT, 0);
+		glBindVertexArray(0);
 
         /* TODO#6-2: Render Column
          *    1. Set up column model matrix.
@@ -237,13 +249,28 @@ void framebufferSizeCallback(GLFWwindow *window, int width, int height) {
  */
 unsigned int createShader(const string &filename, const string &type) {
 	unsigned int shader;
-	if (type == "vert") shader = glCreateShader(GL_VERTEX_SHADER);
-	if (type == "frag") shader = glCreateShader(GL_FRAGMENT_SHADER);
+	if (type == "vert")			shader = glCreateShader(GL_VERTEX_SHADER);
+	else if (type == "frag")	shader = glCreateShader(GL_FRAGMENT_SHADER);
+	else {
+		std::cerr << "[ERROR] In createShader(): unknown shader type '" << type << "'\n";
+		exit(EXIT_FAILURE);
+	}
 	string fileContent = readTextFile(filename);
 	GLchar const* files[] = { fileContent.c_str() };
-	GLint lengths[]       = { fileContent.size() };
+	GLint lengths[]       = { (int)fileContent.size() };
 	glShaderSource(shader, 1, files, lengths);
 	glCompileShader(shader);
+	
+	int success;
+	char infoLog[512];
+	glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
+	if (not success) {
+		glGetShaderInfoLog(shader, 512, NULL, infoLog);
+		std::cerr << "[ERROR] In createShader(): shader '" << filename << "' of type '" << type << "' failed to compile.\n";
+		std::cerr << infoLog << '\n';
+		exit(EXIT_FAILURE);
+	}
+
 	return shader;
 }
 
@@ -259,7 +286,22 @@ unsigned int createProgram(unsigned int vertexShader, unsigned int fragmentShade
 	unsigned int program = glCreateProgram();
 	glAttachShader(program, vertexShader);
 	glAttachShader(program, fragmentShader);
+
 	glLinkProgram(program);
+
+	glDeleteShader(vertexShader);
+	glDeleteShader(fragmentShader);
+
+	int success;
+	char infoLog[512];
+	glGetProgramiv(program, GL_LINK_STATUS, &success);
+	if (not success) {
+		glGetProgramInfoLog(program, 512, NULL, infoLog);
+		std::cerr << "[ERROR] In createProgram(): program failed to link.\n";
+		std::cerr << infoLog << '\n';
+		exit(EXIT_FAILURE);
+	}
+
 	return program;
 }
 
@@ -277,9 +319,9 @@ unsigned int modelVAO(Object &model) {
 	glBindVertexArray(VAO);
 
 	unsigned int VBO[3];
-	glGenBuffers(model.position.size(), &VBO[0]);
+	glGenBuffers(model.positions.size(), &VBO[0]);
 	glBindBuffer(GL_ARRAY_BUFFER, VBO[0]);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(GL_FLOAT) * model.position.size(), &model.position[0], GL_STATIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(GL_FLOAT) * model.positions.size(), &model.positions[0], GL_STATIC_DRAW);
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(GL_FLOAT) * 3, 0);
 	glEnableVertexAttribArray(0);
 	glBindBuffer(GL_ARRAY_BUFFER, VBO[0]);

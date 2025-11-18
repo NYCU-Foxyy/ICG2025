@@ -19,4 +19,10 @@ void main()
 	//		view matrix (view), model matrix (model) and the adjusted vertex position.
 	//   3. Set TexCoord to aTexCoord.
 	// Note: Ensure to handle the squeeze effect for both x and z coordinates.
+	vec3 newPos = aPos;
+	
+	newPos.x += aPos.z * sin(squeezeFactor) / 2;
+	newPos.z += aPos.x * sin(squeezeFactor) / 2;
+	gl_Position = projection * view * model * vec4(newPos, 0.0);
+	TexCoord = aTexCoord;
 }

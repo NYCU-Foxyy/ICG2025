@@ -13,4 +13,6 @@ void main()
 	//   1. Retrieve the color from the texture at texCoord.
 	//   2. Set FragColor to be the texture color * (breathingColor * intensity)
 	//   Note: Ensure FragColor is appropriately set for both breathing light and normal cases.
+	vec4 textureColor = texture(ourTexture, TexCoord);
+	FragColor = textureColor + vec4((breathingColor * intensity), 0.0);
 } 
