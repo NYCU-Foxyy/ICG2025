@@ -119,12 +119,21 @@ int main() {
     double lastTime = glfwGetTime();
     double currentTime;
 
-    /* TODO#5: Data connection - Retrieve uniform variable locations
+    /* Done#5: Data connection - Retrieve uniform variable locations
      *    1. Retrieve locations for model, view, and projection matrices.
      *    2. Retrieve locations for squeezeFactor, breathingColor, intensity, and other parameters.
      * Hint:
      *    glGetUniformLocation
      */
+	
+	GLint viewLocation = glGetUniformLocation(shaderProgram, "view");
+	GLint projectionLocation = glGetUniformLocation(shaderProgram, "projection");
+	GLint modelLocation = glGetUniformLocation(shaderProgram, "model");
+
+	GLint squeezeFactorLocation = glGetUniformLocation(shaderProgram, "squeezeFactor");
+	GLint intensityLocation = glGetUniformLocation(shaderProgram, "intensity");
+	GLint breathingColorLocation = glGetUniformLocation(shaderProgram, "breathingColor");
+	GLint outTextureLocation = glGetUniformLocation(shaderProgram, "ourTexture");
 
     // render loop
     while (!glfwWindowShouldClose(window)) {
