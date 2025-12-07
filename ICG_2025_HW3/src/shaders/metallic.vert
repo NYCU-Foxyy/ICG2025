@@ -21,5 +21,5 @@ void main()
 	TexCoord = aTexCoord;
 	Normal = normalize(aNormal);
 	FragPos = vec3(model * vec4(aPos, 1.0));
-	SkyboxTexCoord = reflect(cameraPos - FragPos, Normal);
+	SkyboxTexCoord = reflect(FragPos - cameraPos, Normal);
 }
