@@ -1,9 +1,12 @@
-#include <bits/stdc++.h>
+#pragma once
+#include <vector>
+#include <string>
+#include <glm/glm.hpp>
 
-class shader_program_t{
+class Shader {
 public:
-    shader_program_t();
-    ~shader_program_t();
+    Shader();
+    ~Shader();
     void add_shader(std::string& filepath, unsigned int type);
     void link_shader();
     void create();
@@ -14,7 +17,7 @@ public:
     void set_uniform_value(const char* name, const glm::vec3& vec);
     void set_uniform_value(const char* name, const float value);
     void set_uniform_value(const char* name, const int value);
-    unsigned int get_program_id() const { return program_handle; }
+    unsigned int get_program_id() const;
     
 private:
     unsigned int program_handle;

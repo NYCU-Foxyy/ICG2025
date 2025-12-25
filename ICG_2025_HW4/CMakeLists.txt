@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.11)
 
-project("ICG_2025_HW3"
+project("ICG_2025_HW4"
         VERSION 1.0.0
         DESCRIPTION "transform with OpenGL")
 

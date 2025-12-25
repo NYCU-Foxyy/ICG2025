@@ -6,460 +6,296 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
-#include "header/cube.h"
-#include "header/Object.h"
-#include "header/shader.h"
 #include "header/stb_image.h"
+#include "header/Object.h"
+#include "header/Shader.h"
+#include "header/Material.h"
+#include "header/Light.h"
+#include "header/Camera.h"
 
+// enable error debugging
 void GLAPIENTRY
 MessageCallback( GLenum source,
                  GLenum type,
-                 GLuint id,
-                 GLenum severity,
-                 GLsizei length,
-                 const GLchar* message,
-                 const void* userParam )
+				 GLuint id,
+				 GLenum severity,
+				 GLsizei length,
+				 const GLchar* message,
+				 const void* userParam )
 {
-  fprintf( stderr, "GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s\n",
-           ( type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : "" ),
-            type, severity, message );
+	fprintf( stderr, "GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s\n",
+	         ( type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : "" ),
+			  type, severity, message );
 }
 
-void framebufferSizeCallback(GLFWwindow *window, int width, int height);
-void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods);
-void processInput(GLFWwindow *window);
-void updateCamera();
-void applyOrbitDelta(float yawDelta, float pitchDelta, float radiusDelta);
-unsigned int loadCubemap(std::vector<std::string> &mFileName);
+void framebufferSizeCallback(GLFWwindow* window, int width, int height);
+void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
+void processInput(GLFWwindow* window);
 
-struct material_t{
-    glm::vec3 ambient;
-    glm::vec3 diffuse;
-    glm::vec3 specular;
-    float gloss;
-};
-
-struct light_t{
-    glm::vec3 position;
-    glm::vec3 ambient;
-    glm::vec3 diffuse;
-    glm::vec3 specular;
-};
-
-struct camera_t{
-    glm::vec3 position;
-    glm::vec3 front;
-    glm::vec3 up;
-    glm::vec3 right;
-    glm::vec3 worldUp;
-    glm::vec3 target;
-
-    float yaw;
-    float pitch;
-    float radius;
-    float minRadius;
-    float maxRadius;
-    float orbitRotateSpeed;
-    float orbitZoomSpeed;
-    float minOrbitPitch;
-    float maxOrbitPitch;
-    bool enableAutoOrbit;
-    float autoOrbitSpeed;
-};
-
-// settings
 int SCR_WIDTH = 800;
 int SCR_HEIGHT = 600;
-
-// cube map 
-unsigned int cubemapTexture;
-unsigned int cubemapVAO, cubemapVBO;
-
-// shader programs 
-int shaderProgramIndex = 0;
-std::vector<shader_program_t*> shaderPrograms;
-shader_program_t* cubemapShader;
-
-light_t light;
-material_t material;
-camera_t camera;
-
-Object* staticModel = nullptr;
-Object* cubeModel = nullptr;
-bool isCube = false;
-glm::mat4 modelMatrix(1.0f);
+glm::vec4 backgroundColor(0.0f, 0.0f, 0.0f, 1.0f);
 
 float currentTime = 0.0f;
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
 
-void model_setup(){
-#if defined(__linux__) || defined(__APPLE__)
-    std::string obj_path = "../../src/asset/obj/Mei_Run.obj";
-    std::string cube_obj_path = "../../src/asset/obj/cube.obj";
-    std::string texture_path = "../../src/asset/texture/Mei_TEX.png";
-#else
-    std::string obj_path = "..\\..\\src\\asset\\obj\\Mei_Run.obj";
-    std::string texture_path = "..\\..\\src\\asset\\texture\\Mei_TEX.png";
-    std::string cube_obj_path = "..\\..\\src\\asset\\obj\\cube.obj";
-#endif
+struct TimeInfo {
+	float currentTime;
+	float deltaTime;
 
-    staticModel = new Object(obj_path);
-    staticModel->loadTexture(texture_path);
-    cubeModel = new Object(cube_obj_path);
+	TimeInfo(): currentTime(glfwGetTime()), deltaTime(0.0f) {}
+	
+	void update() {
+		float cur = glfwGetTime();
+		deltaTime = cur - currentTime;
+		currentTime = cur;
+	}
+};
 
-    modelMatrix = glm::mat4(1.0f);
-    modelMatrix = glm::scale(modelMatrix, glm::vec3(100.0f));
+GLFWwindow* setupWindow() {
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+
+	GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "HW4", NULL, NULL);
+	if (window == NULL) {
+		std::cerr << "Failed to create GLFW window" << std::endl;
+		glfwTerminate();
+		exit(EXIT_FAILURE);
+	}
+	glfwMakeContextCurrent(window);
+	glfwSetFramebufferSizeCallback(window, framebufferSizeCallback);
+	glfwSetKeyCallback(window, keyCallback);
+	glfwSwapInterval(1);
+
+	if (not gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
+		std::cout << "Failed to initialize GLAD" << std::endl;
+		exit(EXIT_FAILURE);
+	}
+
+	glfwGetFramebufferSize(window, &SCR_WIDTH, &SCR_HEIGHT);
+	glViewport(0, 0, SCR_WIDTH, SCR_HEIGHT);
+
+	return window;
 }
 
-void camera_setup(){
-    camera.worldUp = glm::vec3(0.0f, 1.0f, 0.0f);
-    camera.yaw = 90.0f;
-    camera.pitch = 10.0f;
-    camera.radius = 400.0f;
-    camera.minRadius = 150.0f;
-    camera.maxRadius = 800.0f;
-    camera.orbitRotateSpeed = 60.0f;
-    camera.orbitZoomSpeed = 400.0f;
-    camera.minOrbitPitch = -80.0f;
-    camera.maxOrbitPitch = 80.0f;
-    camera.target = glm::vec3(0.0f);
-    camera.enableAutoOrbit = true;
-    camera.autoOrbitSpeed = 20.0f;
+/***** Global Objects *****/
 
-    updateCamera();
+Light light(glm::vec3(1000.0, 1000.0, 0.0), glm::vec3(1.0), glm::vec3(1.0), glm::vec3(1.0));
+Camera camera(glm::vec3(10.0f, 10.0f, 10.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+Object* sphereObj;
+Object* diskObj;
+
+glm::mat4 sphereModel(1.0f);
+glm::mat4 diskModel(1.0f);
+
+vector<Shader*> shaders;
+int shaderGlobalIndex = 0;
+
+/***** Global Objects *****/
+
+/***** Animation Parameters *****/
+
+float sphereRadius = 1.0;
+float sphereSpeed = 0.0;
+
+float spikeHeight = 0.25;
+bool spikeActive = false;
+
+float gravity = 1.0;
+
+/***** Animation Parameters *****/
+
+void setupObjects() {
+	sphereObj = new Object("../../src/asset/obj/sphere.obj");
+	diskObj = new Object("../../src/asset/obj/disk.obj");
+	
+	sphereObj->loadTexture("../../src/asset/texture/wood_0060_color_1k.jpg");
+	diskObj->loadTexture("../../src/asset/texture/disk_color_1k.png");
+
+	sphereObj->setMaterial(Material(glm::vec3(0.5f), glm::vec3(1.0f), glm::vec3(1.0f)));
+
+	sphereModel = glm::translate(sphereModel, glm::vec3(0.0f, 4.0f, 0.0f));
 }
 
-void updateCamera(){
-    float yawRad = glm::radians(camera.yaw);
-    float pitchRad = glm::radians(camera.pitch);
-    float cosPitch = cos(pitchRad);
-
-    camera.position.x = camera.target.x + camera.radius * cosPitch * cos(yawRad);
-    camera.position.y = camera.target.y + camera.radius * sin(pitchRad);
-    camera.position.z = camera.target.z + camera.radius * cosPitch * sin(yawRad);
-
-    camera.front = glm::normalize(camera.target - camera.position);
-    camera.right = glm::normalize(glm::cross(camera.front, camera.worldUp));
-    camera.up = glm::normalize(glm::cross(camera.right, camera.front));
-}
-
-void applyOrbitDelta(float yawDelta, float pitchDelta, float radiusDelta) {
-    camera.yaw += yawDelta;
-    camera.pitch = glm::clamp(camera.pitch + pitchDelta, camera.minOrbitPitch, camera.maxOrbitPitch);
-    camera.radius = glm::clamp(camera.radius + radiusDelta, camera.minRadius, camera.maxRadius);
-    updateCamera();
-}
-
-void light_setup(){
-    light.position = glm::vec3(1000.0, 1000.0, 0.0);
-    light.ambient = glm::vec3(1.0);
-    light.diffuse = glm::vec3(1.0);
-    light.specular = glm::vec3(1.0);
-}
-
-void material_setup(){
-    material.ambient = glm::vec3(0.5);
-    material.diffuse = glm::vec3(1.0);
-    material.specular = glm::vec3(0.7);
-    material.gloss = 50.0;
-}
-
-void shader_setup(){
-#if defined(__linux__) || defined(__APPLE__)
-    std::string shaderDir = "../../src/shaders/";
-#else
-    std::string shaderDir = "..\\..\\src\\shaders\\";
-#endif
-
-    std::vector<std::string> shadingMethod = {
-        "default", "bling-phong", "gouraud", "metallic", "glass_schlick"
-    };
-
-    for(int i=0; i<shadingMethod.size(); i++){
-        std::string vpath = shaderDir + shadingMethod[i] + ".vert";
-        std::string fpath = shaderDir + shadingMethod[i] + ".frag";
-
-        shader_program_t* shaderProgram = new shader_program_t();
-        shaderProgram->create();
-        shaderProgram->add_shader(vpath, GL_VERTEX_SHADER);
-        shaderProgram->add_shader(fpath, GL_FRAGMENT_SHADER);
-        shaderProgram->link_shader();
-        shaderPrograms.push_back(shaderProgram);
-    }
-}
-
-void cubemap_setup(){
-#if defined(__linux__) || defined(__APPLE__)
-    std::string cubemapDir = "../../src/asset/texture/skybox/";
-    std::string shaderDir = "../../src/shaders/";
-#else
-    std::string cubemapDir = "..\\..\\src\\asset\\texture\\skybox\\";
-    std::string shaderDir = "..\\..\\src\\shaders\\";
-#endif
-
-    std::vector<std::string> faces
-    {
-        cubemapDir + "right.jpg",
-        cubemapDir + "left.jpg",
-        cubemapDir + "top.jpg",
-        cubemapDir + "bottom.jpg",
-        cubemapDir + "front.jpg",
-        cubemapDir + "back.jpg"
-    };
-    cubemapTexture = loadCubemap(faces);   
-
-    std::string vpath = shaderDir + "cubemap.vert";
-    std::string fpath = shaderDir + "cubemap.frag";
-    
-    cubemapShader = new shader_program_t();
-    cubemapShader->create();
-    cubemapShader->add_shader(vpath, GL_VERTEX_SHADER);
-    cubemapShader->add_shader(fpath, GL_FRAGMENT_SHADER);
-    cubemapShader->link_shader();
-
-    glGenVertexArrays(1, &cubemapVAO);
-    glGenBuffers(1, &cubemapVBO);
-    glBindVertexArray(cubemapVAO);
-    glBindBuffer(GL_ARRAY_BUFFER, cubemapVBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(cubemapVertices), &cubemapVertices, GL_STATIC_DRAW);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-    glBindVertexArray(0);
-}
-
-void setup(){
-    light_setup();
-    model_setup();
-    shader_setup();
-    camera_setup();
-    cubemap_setup();
-    material_setup();
-
-    glEnable(GL_DEPTH_TEST);
-    glDepthFunc(GL_LEQUAL);
-    glEnable(GL_CULL_FACE);
-    glFrontFace(GL_CCW);
-    glCullFace(GL_BACK);
+void setupGL() {
+	glEnable(GL_DEPTH_TEST);
+	glDepthFunc(GL_LEQUAL);
+//	glEnable(GL_CULL_FACE);
+//	glFrontFace(GL_CCW);
+//	glCullFace(GL_BACK);
 	
 	glEnable(GL_DEBUG_OUTPUT);
 	glDebugMessageCallback(MessageCallback, 0);
 }
 
-void update(){
-    currentTime = glfwGetTime();
-    deltaTime = currentTime - lastFrame;
-    lastFrame = currentTime;
+void setupShaders() {
+	std::string shaderDir = "../../src/shaders/";
 
-    if (camera.enableAutoOrbit) {
-        float yawDelta = camera.autoOrbitSpeed * deltaTime;
-        applyOrbitDelta(yawDelta, 0.0f, 0.0f);
-    }
+	std::vector<std::array<std::string, 3>> shaderNames{
+		{{"bling-phong", "default", "bling-phong"}},
+		{{"bling-phong", "spike", "bling-phong"}}
+	};
+
+	for (auto names : shaderNames) {
+		std::string vpath =	shaderDir + names[0] + ".vert";
+		std::string gpath = shaderDir + names[1] + ".geom";
+		std::string fpath = shaderDir + names[2] + ".frag";
+		
+		Shader* shader = new Shader();
+		shader->create();
+		shader->add_shader(vpath, GL_VERTEX_SHADER);
+		shader->add_shader(gpath, GL_GEOMETRY_SHADER);
+		shader->add_shader(fpath, GL_FRAGMENT_SHADER);
+		shader->link_shader();
+		shaders.push_back(shader);
+	}
 }
 
-void render(){
-    glClearColor(0.0, 0.0, 0.0, 1.0);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-    glm::mat4 view = glm::lookAt(camera.position - glm::vec3(0.0f, 0.2f, 0.1f), camera.position + camera.front, camera.up);
-    glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 1000.0f);
-
-    // Rendering cubemap environment
-    // Hint:
-    // 1. All the needed things are already set up in cubemap_setup() function.
-    // 2. You can use the vertices in cubemapVertices provided in the header/cube.h
-    // 3. You can use the cubemapShader to render the cubemap 
-    //    (refer to the above code to get an idea of how to use the shader program)	
-
-	glDepthMask(GL_FALSE);
-	cubemapShader->use();
-    cubemapShader->set_uniform_value("view", glm::mat4(glm::mat3(view)));
-    cubemapShader->set_uniform_value("projection", projection);
-	cubemapShader->set_uniform_value("skybox", 0);
-	glBindVertexArray(cubemapVAO);
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTexture);
-	glDrawArrays(GL_TRIANGLES, 0, 36);
-	cubemapShader->release();
-	glDepthMask(GL_TRUE);
-
-	auto& shaderProgram = shaderPrograms[shaderProgramIndex];
-
-    // set matrix for view, projection, model transformation
-    shaderProgram->use();
-    shaderProgram->set_uniform_value("model", modelMatrix);
-    shaderProgram->set_uniform_value("view", view);
-    shaderProgram->set_uniform_value("projection", projection);
-    shaderProgram->set_uniform_value("viewPos", camera.position - glm::vec3(0.0f, 0.2f, 0.1f));
-
-	// set skybox texture for reflection
-	glActiveTexture(GL_TEXTURE0 + 1);
-	glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTexture);
-
-	// set the two texture uniform variables so that the shader program assumes we have two textures
-	shaderProgram->set_uniform_value("ourTexture", 0);
-	shaderProgram->set_uniform_value("skybox", 1);
-
-    // set additional uniform value for shader program
-	shaderProgram->set_uniform_value("light.position", light.position);
-	shaderProgram->set_uniform_value("light.ambient", light.ambient);
-	shaderProgram->set_uniform_value("light.diffuse", light.diffuse);
-	shaderProgram->set_uniform_value("light.specular", light.specular);
-	shaderProgram->set_uniform_value("material.gloss", material.gloss);
-	shaderProgram->set_uniform_value("material.ambient", material.ambient);
-	shaderProgram->set_uniform_value("material.diffuse", material.diffuse);
-	shaderProgram->set_uniform_value("material.specular", material.specular);
-	shaderProgram->set_uniform_value("cameraPos", camera.position);
-
-    // specifying sampler for shader program
-
-    if(isCube)
-        cubeModel->draw();
-    else
-        staticModel->draw();
-
-    shaderPrograms[shaderProgramIndex]->release();
+float getPointToPlaneDistance(glm::vec3 p, glm::vec3 normal, glm::vec3 planePoint) {
+	float t = glm::dot(normal, planePoint - p) / glm::dot(normal, normal);
+	return t;
 }
 
-int main() {
-    glfwInit();
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-
-#ifdef __APPLE__
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-#endif
-
-    GLFWwindow *window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "HW3-Static Model", NULL, NULL);
-    if (window == NULL) {
-        std::cerr << "Failed to create GLFW window" << std::endl;
-        glfwTerminate();
-        return -1;
-    }
-    glfwMakeContextCurrent(window);
-    glfwSetFramebufferSizeCallback(window, framebufferSizeCallback);
-    glfwSetKeyCallback(window, keyCallback);
-    glfwSwapInterval(1);
-
-    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
-        std::cout << "Failed to initialize GLAD" << std::endl;
-        return -1;
-    }
-
-    glfwGetFramebufferSize(window, &SCR_WIDTH, &SCR_HEIGHT);
-    glViewport(0, 0, SCR_WIDTH, SCR_HEIGHT);
-
-    setup();
-    
-    while (!glfwWindowShouldClose(window)) {
-        processInput(window);
-        update(); 
-        render(); 
-        glfwSwapBuffers(window);
-        glfwPollEvents();
-    }
-
-    delete staticModel;
-    delete cubeModel;
-    for (auto shader : shaderPrograms) {
-        delete shader;
-    }
-    delete cubemapShader;
-
-    glfwTerminate();
-    return 0;
+float sign(glm::vec3 p1, glm::vec3 p2, glm::vec3 p3) {
+    return (p1.x - p3.x) * (p2.y - p3.y) - (p2.x - p3.x) * (p1.y - p3.y);
 }
 
-void processInput(GLFWwindow *window) {
-    if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
-        glfwSetWindowShouldClose(window, true);
+bool isPointInTriangle(glm::vec3 pt, glm::vec3 v1, glm::vec3 v2, glm::vec3 v3) {
+    float d1, d2, d3;
+    bool has_neg, has_pos;
 
-    glm::vec2 orbitInput(0.0f);
-    float zoomInput = 0.0f;
+    d1 = sign(pt, v1, v2);
+    d2 = sign(pt, v2, v3);
+    d3 = sign(pt, v3, v1);
 
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-        orbitInput.x += 1.0f;
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-        orbitInput.x -= 1.0f;
-    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
-        orbitInput.y += 1.0f;
-    if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS)
-        orbitInput.y -= 1.0f;
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-        zoomInput -= 1.0f;
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-        zoomInput += 1.0f;
+    has_neg = (d1 < 0) || (d2 < 0) || (d3 < 0);
+    has_pos = (d1 > 0) || (d2 > 0) || (d3 > 0);
 
-    if (orbitInput.x != 0.0f || orbitInput.y != 0.0f || zoomInput != 0.0f) {
-        float yawDelta = orbitInput.x * camera.orbitRotateSpeed * deltaTime;
-        float pitchDelta = orbitInput.y * camera.orbitRotateSpeed * deltaTime;
-        float radiusDelta = zoomInput * camera.orbitZoomSpeed * deltaTime;
-        applyOrbitDelta(yawDelta, pitchDelta, radiusDelta);
-    }
+    return !(has_neg && has_pos);
 }
 
-void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods) {
-    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
-        glfwSetWindowShouldClose(window, true);
+void renderModel(int shaderId, glm::mat4 model, Object* obj) {
+	glm::mat4 view = glm::lookAt(camera.getPosition(), camera.getTarget(), camera.getUp());
+	glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 1000.0f);
+	
+	auto& shader = shaders[shaderId];
+	shader->use();
+	shader->set_uniform_value("view", view);
+	shader->set_uniform_value("projection", projection);
+	
+	shader->set_uniform_value("light.position", light.position);
+	shader->set_uniform_value("light.ambient", light.ambient);
+	shader->set_uniform_value("light.diffuse", light.diffuse);
+	shader->set_uniform_value("light.specular", light.specular);
 
-    if (key == GLFW_KEY_0 && (action == GLFW_REPEAT || action == GLFW_PRESS)) 
-        shaderProgramIndex = 0;
-    if (key == GLFW_KEY_1 && (action == GLFW_REPEAT || action == GLFW_PRESS)) 
-        shaderProgramIndex = 1;
-    if (key == GLFW_KEY_2 && (action == GLFW_REPEAT || action == GLFW_PRESS)) 
-        shaderProgramIndex = 2;
-    if (key == GLFW_KEY_3 && action == GLFW_PRESS)
-        shaderProgramIndex = 3;
-    if (key == GLFW_KEY_4 && action == GLFW_PRESS)
-        shaderProgramIndex = 4;
-    if (key == GLFW_KEY_5 && action == GLFW_PRESS)
-        shaderProgramIndex = 5;
-    if (key == GLFW_KEY_6 && action == GLFW_PRESS)
-        shaderProgramIndex = 6;
-    if (key == GLFW_KEY_7 && action == GLFW_PRESS)
-        shaderProgramIndex = 7;
-    if (key == GLFW_KEY_8 && action == GLFW_PRESS)
-        shaderProgramIndex = 8;
-    if( key == GLFW_KEY_9 && action == GLFW_PRESS)
-        isCube = !isCube;
+	shader->set_uniform_value("material.ambient", sphereObj->getMaterial().ambient);
+	shader->set_uniform_value("material.diffuse", sphereObj->getMaterial().diffuse);
+	shader->set_uniform_value("material.specular", sphereObj->getMaterial().specular);
+
+	shader->set_uniform_value("spikeHeight", spikeHeight);
+
+	shader->set_uniform_value("model", model);
+
+	obj->draw();
+
+	shader->release();
 }
 
-void framebufferSizeCallback(GLFWwindow *window, int width, int height) {
-    glViewport(0, 0, width, height);
-    SCR_WIDTH = width;
-    SCR_HEIGHT = height;
+void render() {
+	glClearColor(backgroundColor.r, backgroundColor.g, backgroundColor.b, backgroundColor.a);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	renderModel(shaderGlobalIndex, sphereModel, sphereObj);
+	renderModel(0, diskModel, diskObj);
 }
 
-unsigned int loadCubemap(vector<std::string>& faces)
-{
-    unsigned int texture;
-    glGenTextures(1, &texture);
-    glBindTexture(GL_TEXTURE_CUBE_MAP, texture);
+void cleanup() {
+	delete sphereObj;
+	delete diskObj;
 
-    int width, height, nrChannels;
-    for (unsigned int i = 0; i < faces.size(); i++)
-    {
-        stbi_set_flip_vertically_on_load(false);
-        unsigned char *data = stbi_load(faces[i].c_str(), &width, &height, &nrChannels, 0);
-        if (data)
-        {
-            glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 
-                         0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data
-            );
-            stbi_image_free(data);
-        }
-        else
-        {
-            std::cout << "Cubemap tex failed to load at path: " << faces[i] << std::endl;
-            stbi_image_free(data);
-        }
-    }
-    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+	for (auto shader : shaders)
+		delete shader;
+}
 
-    return texture;
-}  
+void update(TimeInfo& timeInfo) {
+	glm::vec3 spherePosition = glm::vec3(sphereModel * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
+	bool collide = false;
+	glm::vec3 t1, t2, t3;
+	for (int poly_i = 0; poly_i * 9 < diskObj->positions.size(); poly_i++) {
+		glm::vec3 p1(diskObj->positions[poly_i * 9 + 0], diskObj->positions[poly_i * 9 + 1], diskObj->positions[poly_i * 9 + 2]);
+		glm::vec3 p2(diskObj->positions[poly_i * 9 + 3], diskObj->positions[poly_i * 9 + 4], diskObj->positions[poly_i * 9 + 5]);
+		glm::vec3 p3(diskObj->positions[poly_i * 9 + 6], diskObj->positions[poly_i * 9 + 7], diskObj->positions[poly_i * 9 + 8]);
+		glm::vec3 normal = glm::normalize(glm::cross(p2 - p1, p3 - p1));
+		float dist = abs(getPointToPlaneDistance(spherePosition, normal, p1));
+		glm::vec3 projectionPoint = spherePosition + dist * normal;
+		float distThreshold = sphereRadius;
+		if (spikeActive)
+			distThreshold += spikeHeight;
+		if (dist < distThreshold and isPointInTriangle(projectionPoint, p1, p2, p3)) {
+			collide = true;
+			t1 = p1, t2 = p2, t3 = p3;
+		}
+	}
+	if (not collide) {
+		sphereSpeed += -gravity * timeInfo.deltaTime;
+	} else {
+		sphereSpeed = 0;
+	}
+	sphereModel = glm::translate(sphereModel, glm::vec3(0.0f, sphereSpeed * timeInfo.deltaTime, 0.0f));
+}
+
+int main(void) {
+	glfwInit();
+
+	GLFWwindow* window = setupWindow();
+	
+	setupObjects();
+	setupGL();
+	setupShaders();
+
+	TimeInfo timeInfo;
+	while (not glfwWindowShouldClose(window)) {
+//		processInput(window);
+		timeInfo.update();
+		update(timeInfo);
+		render();
+		glfwSwapBuffers(window);
+		glfwPollEvents();
+	}
+
+	cleanup();
+
+	glfwTerminate();
+	return 0;
+}
+
+/*
+void processInput(GLFWwindow* window) {
+	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+		glfwSetWindowShouldClose(window, true);
+}
+*/
+
+void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
+	if (key == GLFW_KEY_ESCAPE and action == GLFW_PRESS)
+		glfwSetWindowShouldClose(window, true);
+
+	if (key == GLFW_KEY_E and action == GLFW_PRESS)
+		shaderGlobalIndex = glm::clamp(shaderGlobalIndex + 1, 0, (int)shaders.size() - 1);
+	if (key == GLFW_KEY_Q and action == GLFW_PRESS)
+		shaderGlobalIndex = glm::clamp(shaderGlobalIndex - 1, 0, (int)shaders.size() - 1);
+	
+	spikeActive = (shaderGlobalIndex == 1);
+
+	if (key == GLFW_KEY_SPACE and action == GLFW_PRESS) {
+		sphereModel = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 3.0f, 0.0f));
+	}
+}
+
+void framebufferSizeCallback(GLFWwindow* window, int width, int height) {
+	glViewport(0, 0, width, height);
+	SCR_WIDTH = width;
+	SCR_HEIGHT = height;
+}

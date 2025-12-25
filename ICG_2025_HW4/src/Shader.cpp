@@ -1,32 +1,35 @@
+#include <iostream>
+#include <fstream>
+#include <sstream>
 
 #include <glad/glad.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-#include "header/shader.h"
+#include "header/Shader.h"
 
-shader_program_t::shader_program_t(){
+Shader::Shader(){
     program_handle = 0;
 }
 
-shader_program_t::~shader_program_t(){
+Shader::~Shader(){
 }
 
-void shader_program_t::create(){
+void Shader::create(){
     program_handle = glCreateProgram();
 }
 
-void shader_program_t::add_shader(std::string& filepath, unsigned int type){
+void Shader::add_shader(std::string& filepath, unsigned int type) {
     
     // compile and add shader to program
     
-    if(type == GL_VERTEX_SHADER){
-        std::cout << "adding vert shader from " << filepath << std::endl;  
-    }
-    else if(type == GL_FRAGMENT_SHADER){
+    if(type == GL_VERTEX_SHADER) {
+        std::cout << "adding vert shader from " << filepath << std::endl;
+    } else if (type == GL_FRAGMENT_SHADER) {
         std::cout << "adding frag shader from " << filepath << std::endl;
-    }
-    else{
+    } else if (type == GL_GEOMETRY_SHADER) {
+		std::cout << "adding geom shader from " << filepath << std::endl;
+	} else {
         std::cout << "unknown shader type" << std::endl; 
         return;
     }
@@ -56,7 +59,7 @@ void shader_program_t::add_shader(std::string& filepath, unsigned int type){
     shader_handles.push_back(shader);
 }
 
-void shader_program_t::link_shader(){
+void Shader::link_shader(){
 
     // attach the compiles shader to program 
     for(auto shader_handle: shader_handles){
@@ -92,36 +95,40 @@ void shader_program_t::link_shader(){
     }
 }
 
-void shader_program_t::use(){
+void Shader::use(){
     glUseProgram(program_handle);
 }
 
-void shader_program_t::release(){
+void Shader::release(){
     glUseProgram(0);
 }
 
-void shader_program_t::set_uniform_value(const char* name, const glm::mat4 &mat){
+void Shader::set_uniform_value(const char* name, const glm::mat4 &mat){
     unsigned int loc = glGetUniformLocation(program_handle, name);
     glUniformMatrix4fv(loc, 1, GL_FALSE, glm::value_ptr(mat)); 
 }
 
-void shader_program_t::set_uniform_value(const char* name, const glm::mat3 &mat){
+void Shader::set_uniform_value(const char* name, const glm::mat3 &mat){
     unsigned int loc = glGetUniformLocation(program_handle, name);
     glUniformMatrix3fv(loc, 1, GL_FALSE, glm::value_ptr(mat));
 }
 
-void shader_program_t::set_uniform_value(const char* name, const glm::vec3& vec){
+void Shader::set_uniform_value(const char* name, const glm::vec3& vec){
     unsigned int loc = glGetUniformLocation(program_handle, name);
     glUniform3fv(loc, 1, glm::value_ptr(vec));
 
 }
 
-void shader_program_t::set_uniform_value(const char* name, const float value){
+void Shader::set_uniform_value(const char* name, const float value){
     unsigned int loc = glGetUniformLocation(program_handle, name);
     glUniform1f(loc, value);
 }
 
-void shader_program_t::set_uniform_value(const char* name, const int value){
+void Shader::set_uniform_value(const char* name, const int value){
     unsigned int loc = glGetUniformLocation(program_handle, name);
     glUniform1i(loc, value);
+}
+
+unsigned int Shader::get_program_id() const {
+	return program_handle;
 }
